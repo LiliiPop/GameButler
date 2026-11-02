@@ -48,7 +48,7 @@ def _(api, m, q, b):
     return all_settings(api)
 
 
-@route("PUT", r"/api/settings/(scheduler|push|appearance|news|evidence|emulator)")
+@route("PUT", r"/api/settings/(scheduler|push|appearance|news|evidence|emulator|app_update)")
 def _(api, m, q, b):
     sec = m.group(1)
     if sec == "push":
@@ -238,3 +238,30 @@ def _(api, m, q, b):
 def _(api, m, q, b):
     from .. import updates
     return updates.check(api.cfg)
+
+
+# ---------------------------------------------------------------- 管家自己的更新（butler/selfupdate.py，11-02）
+@route("GET", "/api/selfupdate")
+def _(api, m, q, b):
+    from .. import selfupdate as SU
+    return {**SU.status(api.cfg), "settings": S.get(api.cfg, "app_update")}
+
+
+@route("POST", "/api/selfupdate/check")
+def _(api, m, q, b):
+    from .. import selfupdate as SU
+    SU.check(api.cfg)
+    return {**SU.status(api.cfg), "settings": S.get(api.cfg, "app_update")}
+
+
+@route("POST", "/api/selfupdate/download")
+def _(api, m, q, b):
+    from .. import selfupdate as SU
+    SU.download(api.cfg)
+    return SU.status(api.cfg)
+
+
+@route("POST", "/api/selfupdate/apply")
+def _(api, m, q, b):
+    from .. import selfupdate as SU
+    return SU.apply(api)

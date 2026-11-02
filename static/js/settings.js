@@ -317,6 +317,10 @@ async function renderSettings() {
       <div class="section-h" style="padding:0 4px"><h2>工具与游戏</h2><span class="small muted">每个游戏用哪个工具、装在哪、用哪个模拟器实例</span></div>
       <div id="tools-host"><div class="small faint" style="padding:0 6px">读取中…</div></div>
     </section>
+    <section class="lib glass set" id="set-selfupdate">
+      <div class="section-h" style="padding:0 4px"><h2>管家更新</h2><span class="small muted">从 GitHub 查管家自己的新版本，下载后换上新文件、自动重启（设置和数据不动）</span></div>
+      <div id="su-host">${suHtml(S.su)}</div>
+    </section>
     <section class="lib glass set">
       <div class="section-h" style="padding:0 4px"><h2>工具更新</h2><span class="small muted">脚本工具有新版本时提醒；更新用它自己的更新器（按你在工具里设的渠道，GitHub 或 Mirror酱）</span></div>
       <div id="upd-host">${updatesHtml(S.updates)}</div>
@@ -567,6 +571,69 @@ document.addEventListener('click', async e => {
   b.disabled = true; b.textContent = '检查中…';
   try { S.updates = await api('POST', '/api/updates/check'); const h = $('#upd-host'); if (h) h.innerHTML = updatesHtml(S.updates); toast('已检查'); }
   catch (x) { fail(x); b.disabled = false; b.textContent = '现在检查'; }
+});
+
+// ------------------------------------------------------------------ 管家更新（11-02，butler/selfupdate.py）
+const vv = x => x ? 'v' + String(x).replace(/^v/i, '') : '';
+const fmtMB = n => n ? `${(n / 1048576).toFixed(1)} MB` : '';
+function suHtml(u) {
+  if (!u) { loadSu(); return '<div class="small faint" style="padding:0 6px">读取中…</div>'; }
+  const c = u.check || {}, j = u.job || {}, st = u.settings || {};
+  const seg = (k, on) => `<div class="seg" role="group"><button type="button" class="${on ? 'on' : ''}" aria-pressed="${!!on}" data-act="su-set" data-k="${k}" data-on="1">开启</button><button type="button" class="${on ? '' : 'on'}" aria-pressed="${!on}" data-act="su-set" data-k="${k}" data-on="0">关闭</button></div>`;
+  let line, act = '';
+  if (j.state === 'downloading') {
+    const pct = j.size ? Math.round(j.got / j.size * 100) : 0;
+    line = `正在下载 ${esc(j.tag || c.latest || '')}：${fmtMB(j.got)}${j.size ? ` / ${fmtMB(j.size)}（${pct}%）` : ''}`;
+  } else if (j.state === 'applying') line = '正在换上新版本，管家马上自动重启…';
+  else if (u.ready) { line = `${esc(c.latest)} 已经下载好`; act = `<button class="btn sm dark" data-act="su-apply">立即更新并重启</button>`; }
+  else if (c.error) line = `没查到：${esc(c.error)}`;
+  else if (c.newer) { line = `有新版本 ${esc(c.latest)}${c.date ? `（${esc(c.date)} 发布）` : ''}${c.package && !c.package.full ? ' · 这个版本只有源码包：只换代码，启动器和自带 Python 不变' : ''}`; act = `<button class="btn sm dark" data-act="su-download">下载并更新</button>`; }
+  else if (c.note) line = esc(c.note);
+  else if (c.latest) line = '已是最新';
+  else line = '还没检查过';
+  const res = u.last_result;
+  return `<div class="lrow"><div class="nm"><b>当前版本 ${esc(vv(u.current))}</b><div>${line}${j.state === 'error' ? ` · <span class="bwarn">${esc(j.error)}</span>` : ''}</div>
+      ${res ? `<div class="note">上次更新（${esc(res.time)}）：${esc(vv(res.from))} → ${esc(vv(res.to))} ${res.ok ? '成功' : `没成功，已放回旧版本：${esc(res.error)}`}</div>` : ''}</div>
+      ${c.newer && c.url ? `<a class="btn sm ghost" href="${esc(c.url)}" target="_blank" rel="noopener">看更新说明</a>` : ''}${act}</div>
+    <div class="lrow"><div class="nm"><b>自动更新</b><div>有新版本时自动下载，没有任务在跑时自动换上并重启（每 6 小时查一次）。关掉就只提醒，自己点「下载并更新」。</div></div>${seg('auto', st.auto)}</div>
+    <div class="lrow"><div class="nm"><b>接收测试版</b><div>GitHub 上标为预发布（pre-release）的版本也更新。</div></div>${seg('pre', st.pre)}</div>
+    <div class="lrow"><div class="nm"><div>${c.checked ? `上次检查：${esc(c.checked)} · 来源 github.com/${esc(c.repo || '')}` : '还没检查过'}</div></div><button class="btn sm" data-act="su-check">现在检查</button></div>`;
+}
+async function loadSu() {
+  try { S.su = await api('GET', '/api/selfupdate'); } catch (e) { return; }
+  const h = $('#su-host'); if (h) h.innerHTML = suHtml(S.su);
+  clearTimeout(S.suTimer);
+  if (S.su.job?.state === 'downloading' && S.route.view === 'settings') S.suTimer = setTimeout(loadSu, 1000);
+}
+// 换文件期间后台回「正在更新」；等新后台起来、版本号变了再刷新页面
+async function waitNewVersion(to) {
+  toast(`正在更新到 ${to}，管家会自动重启…`);
+  const t0 = Date.now();
+  const tick = async () => {
+    try {
+      const r = await fetch('/api/selfupdate').then(x => x.ok ? x.json() : null);
+      if (r && !r.updating && (r.current === String(to).replace(/^v/, '') || r.last_result?.time && Date.now() - t0 > 8000)) { location.reload(); return; }
+    } catch (e) { /* 正在重启 */ }
+    if (Date.now() - t0 < 180e3) setTimeout(tick, 1500); else location.reload();
+  };
+  setTimeout(tick, 2500);
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest?.('[data-act^="su-"]'); if (!b) return;
+  const a = b.dataset.act;
+  try {
+    if (a === 'su-check') { b.disabled = true; b.textContent = '检查中…'; S.su = await api('POST', '/api/selfupdate/check'); toast(S.su.check?.newer ? `有新版本 ${S.su.check.latest}` : S.su.check?.error ? '没查到，看下面的原因' : '已是最新'); }
+    else if (a === 'su-set') { await api('PUT', '/api/settings/app_update', { [b.dataset.k]: b.dataset.on === '1' }); S.su = await api('GET', '/api/selfupdate'); toast('已保存'); }
+    else if (a === 'su-download') { b.disabled = true; await api('POST', '/api/selfupdate/download'); }
+    else if (a === 'su-apply') {
+      if (S.running?.running) return toast('有任务正在运行，等它跑完再更新', true);
+      const ok = await modal({ title: '更新管家', body: `<div class="small">换上 ${esc(S.su?.check?.latest || '')}，管家会自动重启（大约半分钟）。旧文件备份在管家文件夹的 _backup 里；你的设置和数据不动。</div>`, ok: '更新并重启' });
+      if (ok !== true) return;
+      const r = await api('POST', '/api/selfupdate/apply');
+      return waitNewVersion(r.to);
+    }
+  } catch (x) { fail(x); }
+  loadSu();
 });
 
 document.addEventListener('click', e => { if (e.target.closest?.('[data-open-sch-settings]')) setTimeout(() => { if (typeof openSchSettings === 'function') openSchSettings(); }, 600); });

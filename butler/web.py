@@ -190,6 +190,11 @@ def serve(cfg: dict, open_browser: bool = True, port: int = PORT):
     from .housekeeping import start_daily
     start_daily(cfg["machine"]["data_dir"])
 
+    def _later(sec: float, fn):  # 后台线程（daemon）：退出时不用等它到点（11-02：以前开机 2 分钟内重启，旧进程要等定时器到点才退出）
+        t = threading.Timer(sec, fn)
+        t.daemon = True
+        t.start()
+
     def loop(name: str, every: float, fn):
         """后台的定时小事：出错记进调度记录（界面「调度记录」里看得到），下一轮照常。"""
         def run():
@@ -204,7 +209,12 @@ def serve(cfg: dict, open_browser: bool = True, port: int = PORT):
     def updates_tick():  # 脚本工具的新版本：开机 1 分钟后查一次，之后每 12 小时（butler/updates.py）
         from . import updates
         updates.check(cfg)
-    threading.Timer(60, lambda: loop("检查工具更新", 12 * 3600, updates_tick)).start()
+    _later(60, lambda: loop("检查工具更新", 12 * 3600, updates_tick))
+
+    def selfupdate_tick():  # 管家自己的新版本（11-02）：每 6 小时问一次 GitHub；开了自动更新就下载，没有任务在跑时换上（每 10 分钟看一次）
+        from . import selfupdate
+        selfupdate.tick(cfg, port)
+    _later(120, lambda: loop("检查管家更新", 600, selfupdate_tick))
 
     news_state = {"last": time.time() - S.get(cfg, "news")["interval_hours"] * 3600 + 20}  # 启动 20 秒后读第一次
 
@@ -231,4 +241,5 @@ def serve(cfg: dict, open_browser: bool = True, port: int = PORT):
         srv.serve_forever()
     except KeyboardInterrupt:
         pass
+    srv.server_close()  # 马上放开端口：重启 / 更新时新的后台在等它（11-02）
     print(f"[{now_bj()}] 管家已退出", flush=True)

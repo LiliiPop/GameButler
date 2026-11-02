@@ -6,6 +6,7 @@
   news        活动日历：多久读一次、不读哪些来源
   evidence    留证截图：哪些任务截图、保留几天
   emulator    MuMu 模拟器装在哪
+  app_update  管家自己的更新（butler/selfupdate.py）
 
 每一项的默认值写在 DEFAULTS 里；文件里只存改过的。
 """
@@ -49,6 +50,8 @@ DEFAULTS = {
     "evidence": {"keep_days": 7, "tasks": {}},
     "emulator": {"mumu_dir": "",
                  "close": "each_run"},         # 跑完关模拟器：each_run = 每次跑完关；keep_open = 一直开着
+    "app_update": {"auto": True,   # 有新版本时自动下载，没有任务在跑时自动装上（11-02）
+                   "pre": False},  # 也接收测试版（GitHub 上标了 pre-release 的）
 }
 
 
@@ -136,6 +139,8 @@ def _clean(section: str, patch: dict, cfg: dict | None = None) -> dict:
             v = str(v).strip()
             if k == "close" and v not in ("each_run", "keep_open"):
                 raise ValueError("跑完关模拟器只能选「每次跑完关」或「一直开着」")
+        elif section == "app_update":
+            v = bool(v)
         elif section == "evidence":
             if k == "keep_days":
                 v = _int(v, 1, 60, "保留天数")
