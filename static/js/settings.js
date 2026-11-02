@@ -235,10 +235,14 @@ async function renderSetup() {
   const n = S.games.games.length;
   $('#app').innerHTML = `<div class="setup">
     <section class="hero"><div><div class="eyebrow">第一次使用</div><h1>把你的脚本挂上来</h1></div></section>
-    <section class="glass panel"><div class="small muted">管家按时调用你装好的自动化脚本（MaaYuan、MaaSH、BetterGI、三月七……）。先选好 MuMu 模拟器（模拟器游戏要用），再添加脚本；还没装的可以从常见脚本列表下载。认得出来的脚本会套用调好的设置。</div>
-      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn dark" data-act="mount-add">＋ 添加脚本</button></div></section>
+    <section class="glass panel"><div class="small muted">管家不自己打游戏，而是按时调用你装好的自动化脚本（MaaYuan、MaaSH、BetterGI、三月七……），再把结果、活动和抽卡资源汇总给你。</div>
+      <ol class="setup-steps small">
+        <li><b>添加脚本</b>：点下面的「＋ 添加脚本」，选脚本所在的文件夹。还没装脚本的，在弹窗里点「从常见脚本下载」。认得出来的脚本会自动套用调好的设置。</li>
+        <li><b>选 MuMu 模拟器</b>（只有手游脚本需要）：一般会自动找到；没找到时点「选择 MuMu 文件夹」。只玩原神、崩铁这类电脑游戏可以跳过。</li>
+        <li><b>进入总览</b>：之后在「日程」里排好时间，管家就会按时自动跑。</li>
+      </ol></section>
     <section class="glass panel" id="tools-host">${gamesHtml()}</section>
-    <section class="glass panel"><div class="ph"><h3>MuMu 模拟器</h3></div><div id="mumu-host">${mumuHtml()}</div></section>
+    <section class="glass panel"><div class="ph"><h3>MuMu 模拟器 <span class="xsmall faint">（只有手游脚本需要）</span></h3></div><div id="mumu-host">${mumuHtml()}</div></section>
     <div class="setup-nav"><span style="flex:1"></span><button class="btn dark" data-act="setup-done" ${n ? '' : 'disabled'}>${n ? '进入总览' : '先添加一个脚本'}</button></div>
   </div>`;
 }

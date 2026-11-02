@@ -586,6 +586,7 @@ input.inp.xs{height:28px;font-size:12px;padding:0 8px}
 .steps li.done{background:var(--green-bg);color:var(--green-ink)}
 
 .sg{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--line);border-radius:12px;background:rgba(var(--paper-rgb),.6);cursor:pointer}
+.setup-steps { margin: 12px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; line-height: 1.6; }
 .setup-nav{display:flex;gap:8px}
 @media (max-width:760px){.tr-b{padding-left:0}}
 .tools,.trow{width:100%;box-sizing:border-box;align-self:stretch}

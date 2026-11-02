@@ -13,3 +13,4 @@ __pycache__/
 # 开发自用的截图/命令行脚本（带 powershell / cmd /k，容易被杀毒软件误报），不进仓库
 tools/命令行.bat
 tools/截图_*.bat
+*.bak_*

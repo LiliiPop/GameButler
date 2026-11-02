@@ -21,7 +21,7 @@
  "config": {
   "name": "崩坏：星穹铁道（三月七）",
   "type": "m7a",
-  "log_glob": "F:\\March7thAssistant_full\\March7thAssistant_full\\logs\\20*.log",
+  "log_glob": "logs\\20*.log",
   "refresh": "04:00",
   "processes": [
    "March7th Assistant.exe",

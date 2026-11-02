@@ -40,7 +40,7 @@ DEFAULTS = {
     "push": {"provider": "", "daily_at": "23:30", "on_problem": True},
     "appearance": {"palette": "雾光",     # 游戏配色（游戏色块、色条）
                    "theme": "minimal",    # 界面主题：static/themes/<id>.css，或自建的「user:<id>」（butler/themes.py）
-                   "ui_notes": True,      # 左下角「批注」按钮（调优期间默认显示，定稿后连同批注功能一起删）
+                   "ui_notes": False,     # 左下角「批注」按钮（11-02 起默认不显示，设置 → 外观里打开）
                    "home_order": "daily_first",  # 总览上先放哪块：daily_first = 日常一览在上；news_first = 当前活动在上
                    "game_colors": {},     # 自己定的游戏颜色 {游戏 id: "#RRGGBB"}，盖过配色方案里的颜色
                    "aside_order": []},    # 游戏页右栏卡片的顺序（拖动标题栏调整）

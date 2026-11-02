@@ -25,7 +25,11 @@ PRESETS = ROOT / "config" / "presets"
 
 
 def load_config() -> dict:
-    with open(ROOT / "config" / "butler.toml", "rb") as f:
+    conf = ROOT / "config" / "butler.toml"
+    if not conf.exists() and (ROOT / "config" / "butler.example.toml").exists():  # 第一次运行：用示例设置（11-02）
+        import shutil
+        shutil.copyfile(ROOT / "config" / "butler.example.toml", conf)
+    with open(conf, "rb") as f:
         cfg = tomllib.load(f)
     m = cfg["machine"]
     d = Path(m.get("data_dir") or "data")  # 相对路径按管家文件夹算，整个文件夹搬到别处也能用
