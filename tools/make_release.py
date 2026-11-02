@@ -1,10 +1,8 @@
 """打发布包（11-02）：把管家文件夹打成 _release/GameButler-v<版本>-win64.zip，顶层一个 GameButler/ 文件夹。
 
-用法（在管家文件夹里）：runtime\\python\\python.exe tools\\make_release.py
-  1. 先改 VERSION（例如 0.1.1），代码推到 GitHub；
-  2. 跑这个脚本；
-  3. 在 GitHub 上新建发布，标签写 v0.1.1，把生成的 zip 传上去。
-  之后别人的管家（设置 → 管家更新）就能查到、自动下载换上。
+一般不用手动跑：改 VERSION（例如 0.1.1）推到 main，GitHub Actions（.github/workflows/release.yml）会编译启动器、
+放进自带 Python、跑这个脚本并新建发布 v0.1.1。之后别人的管家（设置 → 管家更新）就能查到、自动下载换上。
+手动打包（在管家文件夹里）：runtime\\python\\python.exe tools\\make_release.py
 
 不打进去：data/、_backup/、_release/、config/butler.toml、__pycache__、*.bak_*、tools 里的 .bat、ui_src*.tar 之类的本机文件。
 """
@@ -14,7 +12,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SKIP_TOP = {"data", "_backup", "_release", "_update", ".git"}
+SKIP_TOP = {"data", "_backup", "_release", "_update", ".git", ".github"}
 SKIP_RE = re.compile(r"(__pycache__|\.pyc$|\.bak_|^config/butler\.toml|^tools/.*\.bat$|^ui_src.*\.tar$|^GameButler\.old\.exe$|\.log$)")
 
 

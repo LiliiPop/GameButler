@@ -1,0 +1,66 @@
+# 自动发布（11-02）：VERSION 改了推到 main，就在 GitHub 上打好完整的 Windows 包并新建发布。
+# 装好的管家（设置 → 管家更新）查到新版本后自动下载换上。
+#
+# 包里有什么：仓库里的代码 + 用 Mono 从 launcher/src 编译的 GameButler.exe
+#            + 自带 Python（runtime/，沿用上一个发布包里的那份，保证和大家电脑上的一样，更新时不用换）
+# 发布说明：docs/releases/v<版本>.md；没有这个文件就用 GitHub 自动生成的。
+# 已经有同名标签的发布就跳过（重复推同一个版本号不会重复发布）。
+name: 发布
+
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 读版本号
+        id: v
+        run: |
+          VER=$(tr -d ' \r\n' < VERSION)
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+          if gh release view "v$VER" >/dev/null 2>&1; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+            echo "v$VER 已经发布过，跳过"
+          fi
+
+      - name: 编译启动器 GameButler.exe
+        if: steps.v.outputs.skip != '1'
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mono-mcs mono-devel
+          sh launcher/build.sh
+
+      - name: 自带 Python（沿用上一个发布包里的 runtime）
+        if: steps.v.outputs.skip != '1'
+        run: |
+          PREV=$(gh release list --limit 30 --exclude-drafts --json tagName --jq '.[0].tagName')
+          if [ -z "$PREV" ]; then echo "还没有发布过的版本，拿不到 runtime" >&2; exit 1; fi
+          echo "runtime 来自 $PREV"
+          mkdir -p /tmp/prev
+          gh release download "$PREV" --pattern '*win64*.zip' --dir /tmp/prev
+          unzip -q /tmp/prev/*.zip 'GameButler/runtime/*' -d /tmp/prev/x
+          mv /tmp/prev/x/GameButler/runtime ./runtime
+          test -f runtime/python/pythonw.exe
+
+      - name: 打包
+        if: steps.v.outputs.skip != '1'
+        run: python3 tools/make_release.py
+
+      - name: 新建发布
+        if: steps.v.outputs.skip != '1'
+        run: |
+          VER=${{ steps.v.outputs.ver }}
+          NOTES=docs/releases/v$VER.md
+          if [ -f "$NOTES" ]; then N="--notes-file $NOTES"; else N="--generate-notes"; fi
+          gh release create "v$VER" "_release/GameButler-v$VER-win64.zip" --title "v$VER" --target "$GITHUB_SHA" $N
