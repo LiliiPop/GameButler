@@ -35,3 +35,10 @@
 3. 双击 `GameButler.exe`（需要管理员权限），或命令行 `runtime\python\python.exe gb.py web`。
 
 详细说明见 `使用说明.txt`。
+
+## 许可证与第三方代码
+
+本项目用 MIT 许可证（见 `LICENSE`）。米游社扫码登录和原神每日签到（`butler/mys.py`）移植自
+[Snap Hutao Remastered](https://github.com/SnapHutaoRemasteringProject/Snap.Hutao.Remastered)（MIT），
+界面上画二维码用的是 [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator)（MIT）。
+完整声明见 `docs/THIRD_PARTY_NOTICES.md`。

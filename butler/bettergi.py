@@ -237,6 +237,10 @@ class BetterGIGame:
             group_items = None
             if name in self.pre_tasks():
                 desc = self.pre_tasks()[name].get("description") or "在启动 BetterGI 之前先打开的程序。"
+                if name == "米游社签到":
+                    from . import mys
+                    if mys.logged_in(self.cfg):
+                        desc = "已登录米游社：管家自己签到（不用胡桃），签到结果记在运行记录里。账号在「设置 → 米游社账号」管理。"
             elif name == FINISH:
                 desc = "一条龙全部跑完后 BetterGI 做什么。选「关闭游戏和软件」最省事；管家另外会在 90 秒后兜底关闭。"
                 options["完成后操作"] = {"type": "select", "label": "完成后操作", "description": "",
@@ -580,6 +584,18 @@ class BetterGIGame:
         exe = c.get("exe", "")
         ctx.emit("task_start", task=key, attempt=1)
         name = os.path.basename(exe)
+        from . import mys
+        if c.get("kind") == "mys_sign" or (it["task"] == "米游社签到" and mys.logged_in(self.cfg)):
+            # 11-02：扫码登录过米游社 → 管家自己签到（不用胡桃），结果看得到；没登录、也没配胡桃 → 提示去登录
+            if mys.logged_in(self.cfg) or not exe:
+                try:
+                    ok, why = mys.sign_all(self.cfg)
+                except Exception as e:
+                    ok, why = False, f"签到出错：{type(e).__name__}: {e}"
+                ev = {"task": key, "attempt": 1, "result": "succeeded" if ok else "failed", "detail": why,
+                      "minutes": 0, "focus": [], "flags": [], "shots": []}
+                ctx.emit("task_end", **ev)
+                return {**ev, "attempts": 1}
         if ctx.is_running(name):
             res, why = "succeeded", f"{name} 已经在运行，没有重复打开"
         elif not os.path.exists(exe):

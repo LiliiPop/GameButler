@@ -319,6 +319,10 @@ async function renderSettings() {
       <div class="section-h" style="padding:0 4px"><h2>工具与游戏</h2><span class="small muted">每个游戏用哪个工具、装在哪、用哪个模拟器实例</span></div>
       <div id="tools-host"><div class="small faint" style="padding:0 6px">读取中…</div></div>
     </section>
+    <section class="lib glass set" id="set-mys">
+      <div class="section-h" style="padding:0 4px"><h2>米游社账号</h2><span class="small muted">用米游社 App 扫码登录后，原神的「米游社签到」由管家自己完成（不用装胡桃）</span></div>
+      <div id="mys-host">${mysHtml(S.mys)}</div>
+    </section>
     <section class="lib glass set" id="set-selfupdate">
       <div class="section-h" style="padding:0 4px"><h2>管家更新</h2><span class="small muted">从 GitHub 查管家自己的新版本，下载后换上新文件、自动重启（设置和数据不动）</span></div>
       <div id="su-host">${suHtml(S.su)}</div>
@@ -573,6 +577,61 @@ document.addEventListener('click', async e => {
   b.disabled = true; b.textContent = '检查中…';
   try { S.updates = await api('POST', '/api/updates/check'); const h = $('#upd-host'); if (h) h.innerHTML = updatesHtml(S.updates); toast('已检查'); }
   catch (x) { fail(x); b.disabled = false; b.textContent = '现在检查'; }
+});
+
+// ------------------------------------------------------------------ 米游社账号（11-02，butler/mys.py，扫码登录移植自 Snap Hutao，MIT）
+function mysHtml(d) {
+  if (!d) { api('GET', '/api/mys').then(r => { S.mys = r; const h = $('#mys-host'); if (h) h.innerHTML = mysHtml(r); }).catch(() => {}); return '<div class="small faint" style="padding:0 6px">读取中…</div>'; }
+  const rows = (d.accounts || []).map(a => `<div class="lrow"><div class="nm"><b>米游社账号 ${esc(a.aid)}${a.nickname ? ` · ${esc(a.nickname)}` : ''}</b>
+      <div>${a.roles.length ? '原神：' + a.roles.map(r => `${esc(r.nickname || '')}（${esc(r.uid)}${r.region_name ? ' · ' + esc(r.region_name) : ''}）`).join('、') : '这个账号下没有找到原神角色'}</div>
+      ${a.last?.time ? `<div class="note">上次签到 ${esc(a.last.time)}：<span class="${a.last.ok ? '' : 'bwarn'}">${esc(a.last.text || '')}</span></div>` : '<div class="note">登录于 ' + esc(a.added || '') + '，还没签到过</div>'}</div>
+    <button class="btn sm ghost" data-act="mys-remove" data-aid="${esc(a.aid)}">退出登录</button></div>`).join('');
+  return `${rows || '<div class="lrow"><div class="nm"><div>还没有登录。登录后，原神任务预设里的「米游社签到」就由管家自己签（每个原神角色都签），结果记在运行记录里。</div></div></div>'}
+    <div class="lrow"><div class="nm"><div class="xsmall faint">登录凭证只存在这台电脑的 data/mys.json 里，不上传；不要把 data 文件夹发给别人。米游社要求人机验证时这天签不上，需要在 App 里手动签一次。扫码登录和签到的做法移植自 Snap Hutao（MIT）。</div></div>
+      <span style="display:flex;gap:8px">${(d.accounts || []).length ? '<button class="btn sm" data-act="mys-sign">现在签到</button>' : ''}<button class="btn sm dark" data-act="mys-login">扫码登录</button></span></div>`;
+}
+async function mysLogin() {
+  let alive = true, ticket = '';
+  const show = async m => {
+    const box = m.querySelector('#mys-qr'), tip = m.querySelector('#mys-tip');
+    try {
+      const r = await api('POST', '/api/mys/qr'); ticket = r.ticket;
+      const qr = qrcode(0, 'M'); qr.addData(r.url); qr.make();
+      box.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 3, scalable: true });
+      tip.textContent = '打开米游社 App，点右上角扫一扫';
+    } catch (e) { tip.textContent = e.message; }
+  };
+  const poll = async m => {
+    while (alive) {
+      await sleep(2500); if (!alive || !ticket) continue;
+      let st; try { st = await api('POST', '/api/mys/qr/status', { ticket }); } catch (e) { m.querySelector('#mys-tip').textContent = e.message; continue; }
+      if (st.state === 'scanned') m.querySelector('#mys-tip').textContent = '已扫码，请在手机上点「确认登录」';
+      else if (st.state === 'expired') { m.querySelector('#mys-tip').textContent = '二维码过期了，已换一张'; await show(m); }
+      else if (st.state === 'done') {
+        alive = false; toast(`已登录米游社账号 ${st.aid}：找到 ${st.roles} 个原神角色`);
+        S.mys = await api('GET', '/api/mys'); const h = $('#mys-host'); if (h) h.innerHTML = mysHtml(S.mys);
+        $('#modal [data-m="x"]')?.click(); return;
+      }
+    }
+  };
+  await modal({ title: '扫码登录米游社', ok: '', cancel: '关闭',
+    body: `<div style="display:flex;flex-direction:column;align-items:center;gap:12px"><div id="mys-qr" style="width:220px;height:220px;background:#fff;border-radius:12px;padding:6px"></div>
+      <div class="small" id="mys-tip">正在生成二维码…</div>
+      <div class="xsmall faint" style="text-align:center">用米游社 App 扫码（不是游戏里的扫码）。登录后管家只用它做每日签到。</div></div>`,
+    onMount: m => { show(m); poll(m); } });
+  alive = false;
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest?.('[data-act^="mys-"]'); if (!b) return;
+  try {
+    if (b.dataset.act === 'mys-login') return mysLogin();
+    if (b.dataset.act === 'mys-remove') {
+      if (!await confirmBox('退出这个米游社账号？', '退出后原神的「米游社签到」会改回打开胡桃（如果设置过），或提示没登录。', '退出登录', true)) return;
+      S.mys = await api('POST', '/api/mys/remove', { aid: b.dataset.aid });
+    }
+    if (b.dataset.act === 'mys-sign') { b.disabled = true; b.textContent = '签到中…'; const r = await api('POST', '/api/mys/sign'); toast(r.text, !r.ok); S.mys = { accounts: r.accounts }; }
+    const h = $('#mys-host'); if (h) h.innerHTML = mysHtml(S.mys);
+  } catch (x) { fail(x); }
 });
 
 // ------------------------------------------------------------------ 管家更新（11-02，butler/selfupdate.py）

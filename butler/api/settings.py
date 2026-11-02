@@ -265,3 +265,42 @@ def _(api, m, q, b):
 def _(api, m, q, b):
     from .. import selfupdate as SU
     return SU.apply(api)
+
+
+# ---------------------------------------------------------------- 米游社扫码登录 + 原神每日签到（butler/mys.py，移植自 Snap Hutao，11-02）
+@route("GET", "/api/mys")
+def _(api, m, q, b):
+    from .. import mys
+    return {"accounts": mys.accounts(api.cfg)}
+
+
+@route("POST", "/api/mys/qr")
+def _(api, m, q, b):
+    from .. import mys
+    try:
+        return mys.qr_create(api.cfg)
+    except mys.MysError as e:
+        raise ValueError(str(e))
+
+
+@route("POST", "/api/mys/qr/status")
+def _(api, m, q, b):
+    from .. import mys
+    try:
+        return mys.qr_status(api.cfg, str(b.get("ticket") or ""))
+    except mys.MysError as e:
+        raise ValueError(str(e))
+
+
+@route("POST", "/api/mys/remove")
+def _(api, m, q, b):
+    from .. import mys
+    mys.remove(api.cfg, str(b.get("aid") or ""))
+    return {"accounts": mys.accounts(api.cfg)}
+
+
+@route("POST", "/api/mys/sign")
+def _(api, m, q, b):
+    from .. import mys
+    ok, text = mys.sign_all(api.cfg)
+    return {"ok": ok, "text": text, "accounts": mys.accounts(api.cfg)}
