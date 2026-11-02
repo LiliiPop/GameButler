@@ -94,7 +94,8 @@ HALT = "中止队列"  # rs.pause 的原因：和「让出电脑」区分
 @route("GET", "/api/state")
 def _(api, m, q, b):
     cur = api.rs.current()
-    return {"games": [game_card(api, gid, cur) for gid in api.cfg["games"]], "now": now_bj(),
+    from .. import watch as W
+    return {"games": [game_card(api, gid, cur) for gid in api.cfg["games"]], "watch": W.cards(api.cfg), "now": now_bj(),
             "paused": api.rs.paused(), "game_day": sched_day().isoformat(), "admin": is_admin(),
             "appearance": api.appearance()}
 

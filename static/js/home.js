@@ -24,7 +24,7 @@ function keepScroll(fn) {
 }
 function renderHome() { keepScroll(renderHome0); }
 function renderHome0() {  // B 极简：标题 → 运行行 → 日常一览 | 接下来 → 当前活动（设置里可以把当前活动放上面）
-  const games = S.state.games;
+  const games = allGames();  // 11-02：仅关注的游戏也在日常一览里（手动标记完成）
   const avail = games.filter(g => g.available);
   const totalGames = avail.filter(g => g.total > 0);
   const doneGames = totalGames.filter(g => g.done >= g.total).length;
@@ -32,13 +32,13 @@ function renderHome0() {  // B 极简：标题 → 运行行 → 日常一览 | 
   const left = totalGames.length - doneGames;
   let headline;
   if (!totalGames.length) headline = '还没有可用的游戏';
-  else if (!left && !att) headline = '今天的日常都跑完了';
-  else headline = (left ? `还剩 ${left} 个游戏没跑完` : '游戏都跑过了') + (att ? `，${att} 项要处理` : '');
+  else if (!left && !att) headline = S.state.games.length ? '今天的日常都跑完了' : '今天的日常都做完了';
+  else headline = (left ? `还剩 ${left} 个游戏没${S.state.games.length ? '跑完' : '做完'}` : '游戏都跑过了') + (att ? `，${att} 项要处理` : '');
   const off = games.filter(g => !g.available);
   const daily = `<div class="b-cols">
       <section aria-label="日常一览">
         <div class="b-h"><h2>日常一览</h2><span>${doneGames} / ${totalGames.length} 完成</span></div>
-        <div class="b-list">${avail.map(g => homeRow(g, games.indexOf(g))).join('') || '<div class="b-empty">还没有挂游戏：去「设置」里添加</div>'}</div>
+        <div class="b-list">${avail.map(g => homeRow(g, games.indexOf(g))).join('') || '<div class="b-empty">还没有游戏：去「设置 → 工具与游戏」添加脚本，或「添加游戏」只看活动</div>'}</div>
         ${off.length ? `<div class="b-off">待接入：${off.map(g => `<span title="${esc(g.message || '待接入')}">${esc(splitName(g.name)[0])}</span>`).join('、')}</div>` : ''}
       </section>
       <aside aria-label="接下来">
@@ -55,7 +55,7 @@ function renderHome0() {  // B 极简：标题 → 运行行 → 日常一览 | 
   <div class="home b-home">
     <section class="hero">
       <div><span class="eyebrow num">${esc(dayEyebrow())}</span><h1>${headline}</h1></div>
-      <div class="side">${S.running?.running ? '' : `<button class="btn dark" data-act="run-all">开始全部</button>`}</div>
+      <div class="side">${S.running?.running || !S.state.games.some(g => g.available) ? '' : `<button class="btn dark" data-act="run-all">开始全部</button>`}</div>
     </section>
     ${newsFirst ? news + daily + res : daily + res + news}
   </div>`;
@@ -90,6 +90,7 @@ function attSummary(list) {
   return [...by].map(([k, v]) => `${esc(v.join('、'))}：${esc(k)}`).join('；');
 }
 function homeRow(g, i) {
+  if (g.watch) return watchRow(g, i);
   const rep = repMap()[g.id]; const first = (rep?.attention || [])[0];
   const st = gstate(g);
   const label = { run: '运行中', bad: '要处理', ok: '完成' }[st[1]] || (g.total ? '等待' : '没有任务');
@@ -107,6 +108,22 @@ function homeRow(g, i) {
     <span class="b-name"><i></i><b>${esc(splitName(g.name)[0])}</b></span>
     <span class="badge ${st[1] === 'off' ? '' : st[1]}">${label}</span>
     <span class="b-det" title="${det.replace(/<[^>]+>/g, '')}">${det}</span>${st[1] === 'bad' ? moreBtn('立刻重跑 / 标为已完成 / 跳过任务') : ''}</a>`;
+}
+// 仅关注的游戏（11-02）：没有脚本，右键 / ⋯ 手动标记今天的日常做完没有；到这个游戏的下一个游戏日自动变回没完成
+function watchRow(g, i) {
+  const ok = g.done >= g.total;
+  const det = `${ok ? '今天已标记完成' : '仅关注 · 没挂脚本，做完了右键标记'} <span class="faint xsmall" title="这一行算的是 ${esc(g.today)} 这个游戏日：每天北京 ${esc(g.refresh || '')} 刷新后换到下一天">· ${esc(g.today.slice(5))}</span>`;
+  return `<a class="b-row" href="#/news" data-gid="${esc(g.id)}" data-watch="1" style="--gc:${tint(g, i)}" title="右键：${ok ? '取消已完成' : '标记已完成'}">
+    <span class="b-name"><i></i><b>${esc(splitName(g.name)[0])}</b></span>
+    <span class="badge ${ok ? 'ok' : ''}">${ok ? '完成' : '未完成'}</span>
+    <span class="b-det" title="${det.replace(/<[^>]+>/g, '')}">${det}</span>${moreBtn(ok ? '取消已完成' : '标记已完成')}</a>`;
+}
+async function watchDone(gid, on) {
+  try {
+    await api('POST', `/api/watch/${encodeURIComponent(gid)}/done`, { on });
+    toast(on ? `${shortName(gid)}：今天已标记完成` : `${shortName(gid)}：已取消完成`);
+    await loadState(); if (S.route.view === 'home') renderHome();
+  } catch (e) { fail(e); }
 }
 // ------------------------------------------------------------------ 报告
 async function renderReport(day) {

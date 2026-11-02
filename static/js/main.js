@@ -19,6 +19,10 @@ document.addEventListener('click', async e => {
     case 'run': startGame(el.dataset.gid); break;
     case 'run-all': runAll(); break;
     case 'mount-add': openAddScript(); break;
+    case 'watch-open': openAddWatch(); break;
+    case 'watch-remove': watchToggle(el.dataset.gid, false); break;
+    case 'go-news': newsUiInit().focus = el.dataset.gid; location.hash = '#/news'; break;
+    case 'watch-done': watchDone(el.dataset.gid, el.dataset.on === '1'); break;
     case 'drawer': openDrawer(el.dataset.gid); break;
     case 'sch-settings': openSchSettings(); break;
     case 'res-add': resAdd(el.dataset.gid); break;

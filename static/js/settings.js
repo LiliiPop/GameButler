@@ -5,8 +5,8 @@
 // ------------------------------------------------------------------ 工具与游戏：挂载的游戏、工具路径、模拟器
 S.games = null; S.emus = null;
 async function loadGames() {
-  const [g, e] = await Promise.all([api('GET', '/api/games'), api('GET', '/api/emulators')]);
-  S.games = g; S.emus = e;
+  const [g, e, w] = await Promise.all([api('GET', '/api/games'), api('GET', '/api/emulators'), api('GET', '/api/watch')]);
+  S.games = g; S.emus = e; S.watchCat = w.games || [];
   return g;
 }
 function gameRow(t) {
@@ -48,9 +48,12 @@ function gamesHtml() {
   const all = S.games?.games || [];
   const on = all.filter(t => t.followed), off = all.filter(t => !t.followed);
   const mumu = S.emus;
-  return `<div class="tools"><div class="trow add-row"><button class="btn sm dark" data-act="mount-add">＋ 添加脚本</button>
-      <span class="xsmall faint">选一个文件夹或程序：MaaFramework 项目（有 interface.json）、BetterGI、三月七、明日方舟 MAA，或任意命令行脚本（.exe / .bat / .py）。以前挂过的会恢复原来的设置。</span></div>
+  const watched = (S.watchCat || []).filter(x => x.watched && !x.mounted);
+  return `<div class="tools"><div class="trow add-row"><button class="btn sm dark" data-act="mount-add">＋ 添加脚本</button><button class="btn sm" data-act="watch-open">＋ 添加游戏</button>
+      <span class="xsmall faint">添加脚本：选一个文件夹或程序（MaaFramework 项目、BetterGI、三月七、明日方舟 MAA，或任意命令行脚本），管家按时帮你跑。以前挂过的会恢复原来的设置。<br>添加游戏：不挂脚本，只看它的活动（官方站外来源）、在总览「日常一览」里自己标记今天做完没有。</span></div>
     ${on.map(gameRow).join('')}
+    ${watched.length ? `<div class="trow"><div class="tr-h"><b>仅关注的游戏</b><span class="small faint">没挂脚本：看活动、手动标记完成；以后挂上它的脚本就自动按挂着的算</span></div>
+      <div class="chips">${watched.map(x => `<span class="chip"><i class="dot" style="background:${newsColor(x.id)}"></i>${esc(x.name)} <button type="button" class="linkbtn" data-act="watch-remove" data-gid="${esc(x.id)}" title="不再关注：日常一览和活动里都不再出现（读过的活动留着，重新关注就接上）">不再关注</button></span>`).join('')}</div></div>` : ''}
     ${off.length ? `<div class="trow"><div class="tr-h"><b>取消挂载的游戏</b><span class="small faint">数据还在，重新挂载就接上</span></div>
       <div class="chips">${off.map(x => `<button class="btn xs" data-act="mount-follow" data-gid="${esc(x.id)}">＋ ${esc(splitName(x.name)[0])}</button><button class="btn xs ghost" data-act="mount-delete" data-gid="${esc(x.id)}" title="彻底删除">删除</button>`).join('')}</div></div>` : ''}
 
@@ -101,6 +104,33 @@ async function toolAct(act, el) {
 async function loadToolsSection() {
   const host = $('#tools-host'); if (!host) return;
   try { await loadGames(); drawTools(); } catch (e) { host.innerHTML = `<div class="small bwarn">${esc(e.message)}</div>`; }
+}
+
+// ------------------------------------------------------------------ 添加游戏（11-02）：仅关注，不挂脚本
+function watchListHtml() {
+  return `<div class="watch-list">${(S.watchCat || []).map(x => `<div class="wl-row"><i class="dot" style="background:${newsColor(x.id)}"></i><b>${esc(x.name)}</b>
+    <span class="xsmall faint">每天北京 ${esc(x.refresh)} 刷新</span><span style="flex:1"></span>
+    ${x.mounted ? '<span class="small muted">已挂脚本</span>' : x.watched
+      ? `<span class="small muted">已关注</span><button type="button" class="btn xs ghost" data-w="0" data-gid="${esc(x.id)}">不再关注</button>`
+      : `<button type="button" class="btn xs dark" data-w="1" data-gid="${esc(x.id)}">关注</button>`}</div>`).join('')}</div>
+    <div class="xsmall faint" style="margin-top:10px">现在支持这些游戏（有官方站外来源的）；以后会加更多。</div>`;
+}
+async function watchToggle(gid, on) {
+  try {
+    const r = await api('POST', `/api/watch/${on ? 'add' : 'remove'}`, { game: gid });
+    S.watchCat = r.games || S.watchCat;
+    toast(on ? `已关注 ${(S.watchCat.find(x => x.id === gid) || {}).name || gid}：正在读它的活动` : '已不再关注');
+    S.newsAt = 0; await afterMountChange();
+  } catch (e) { fail(e); }
+}
+async function openAddWatch() {
+  try { S.watchCat = (await api('GET', '/api/watch')).games || []; } catch (e) { return fail(e); }
+  await modal({ title: '添加游戏', ok: '完成', cancel: '', body: `<div class="small muted" style="margin-bottom:12px">不挂脚本，只关注这个游戏：活动日历、轮播只读官方站外来源；总览「日常一览」里有它一行，做完了右键「标记已完成」。</div><div id="wl-host">${watchListHtml()}</div>`,
+    onMount: m => m.addEventListener('click', async e => {
+      const b = e.target.closest('[data-w]'); if (!b) return;
+      b.disabled = true; await watchToggle(b.dataset.gid, b.dataset.w === '1');
+      const h = m.querySelector('#wl-host'); if (h) h.innerHTML = watchListHtml();
+    }) });
 }
 
 // ------------------------------------------------------------------ 挂载：添加脚本、取消挂载 / 重新挂载、彻底删除
@@ -232,7 +262,7 @@ async function editGame(gid) {
 async function renderSetup() {
   try { await loadGames(); } catch (e) { $('#app').innerHTML = `<div class="glass skeleton">${esc(e.message)}</div>`; return; }
   if (S.route.view !== 'setup') return;
-  const n = S.games.games.length;
+  const n = S.games.games.length + (S.watchCat || []).filter(x => x.watched).length;
   $('#app').innerHTML = `<div class="setup">
     <section class="hero"><div><div class="eyebrow">第一次使用</div><h1>把你的脚本挂上来</h1></div></section>
     <section class="glass panel"><div class="small muted">管家不自己打游戏，而是按时调用你装好的自动化脚本（MaaYuan、MaaSH、BetterGI、三月七……），再把结果、活动和抽卡资源汇总给你。</div>
@@ -240,10 +270,11 @@ async function renderSetup() {
         <li><b>添加脚本</b>：点下面的「＋ 添加脚本」，选脚本所在的文件夹。还没装脚本的，在弹窗里点「从常见脚本下载」。认得出来的脚本会自动套用调好的设置。</li>
         <li><b>选 MuMu 模拟器</b>（只有手游脚本需要）：一般会自动找到；没找到时点「选择 MuMu 文件夹」。只玩原神、崩铁这类电脑游戏可以跳过。</li>
         <li><b>进入总览</b>：之后在「日程」里排好时间，管家就会按时自动跑。</li>
+        <li>还没有脚本、只想看活动？点「＋ 添加游戏」：不挂脚本也能看活动日历和轮播，在总览里自己标记今天做完没有。</li>
       </ol></section>
     <section class="glass panel" id="tools-host">${gamesHtml()}</section>
     <section class="glass panel"><div class="ph"><h3>MuMu 模拟器 <span class="xsmall faint">（只有手游脚本需要）</span></h3></div><div id="mumu-host">${mumuHtml()}</div></section>
-    <div class="setup-nav"><span style="flex:1"></span><button class="btn dark" data-act="setup-done" ${n ? '' : 'disabled'}>${n ? '进入总览' : '先添加一个脚本'}</button></div>
+    <div class="setup-nav"><span style="flex:1"></span><button class="btn dark" data-act="setup-done" ${n ? '' : 'disabled'}>${n ? '进入总览' : '先添加一个脚本或游戏'}</button></div>
   </div>`;
 }
 

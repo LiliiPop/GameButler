@@ -94,3 +94,33 @@ def news_now(data_dir, names) -> str:
         done = set(re.findall(r"· (\S+) 读完", cur))
         out += [x for x in re.findall(r"· 读取 (\S+)", cur) if x not in done and x not in out]
     return "、".join(out[:6])
+
+
+# ---------------------------------------------------------------- 仅关注的游戏（11-02）：不挂脚本，只看活动 + 手动标记完成
+@route("GET", "/api/watch")
+def _(api, m, q, b):
+    from .. import watch as W
+    return {"games": W.catalog(api.cfg)}
+
+
+@route("POST", "/api/watch/add")
+def _(api, m, q, b):
+    from .. import watch as W
+    gid = str(b.get("game") or "")
+    W.add(api.cfg, gid)
+    spawn_background(f"news-{gid}", ["news", "fetch", "--from-butler", gid], api.data_dir)  # 马上读一次它的活动
+    return {"ok": True, "games": W.catalog(api.cfg)}
+
+
+@route("POST", "/api/watch/remove")
+def _(api, m, q, b):
+    from .. import watch as W
+    W.remove(api.cfg, str(b.get("game") or ""))
+    return {"ok": True, "games": W.catalog(api.cfg)}
+
+
+@route("POST", r"/api/watch/(\w+)/done")
+def _(api, m, q, b):
+    from .. import watch as W
+    W.set_done(api.cfg, m.group(1), bool(b.get("on", True)))
+    return {"ok": True}

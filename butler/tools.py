@@ -146,5 +146,6 @@ def emulators(cfg: dict) -> dict:
 
 
 def needs_setup(cfg: dict) -> bool:
-    """第一次打开：还没挂过任何游戏。"""
-    return not GD.all_records(cfg)
+    """第一次打开：还没挂过任何游戏，也没有仅关注的游戏（11-02）。"""
+    from . import watch as W
+    return not GD.all_records(cfg) and not W.records(cfg)

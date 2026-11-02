@@ -1346,3 +1346,9 @@ body.sorting,body.sorting *{cursor:grabbing!important;user-select:none}
 /* 轮播：同一个活动的第几张图（11-02） */
 .banner .bcount{position:absolute;right:16px;top:14px;z-index:3;font-size:12px;padding:2px 9px;border-radius:999px;background:rgba(0,0,0,.42);color:#fff;letter-spacing:.04em;pointer-events:none}
 .banner{touch-action:pan-y;user-select:none}
+/* 添加游戏（11-02）：仅关注的游戏列表 */
+.watch-list{display:flex;flex-direction:column}
+.watch-list .wl-row{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--line)}
+.watch-list .wl-row:last-child{border-bottom:0}
+.watch-list .wl-row b{font-size:14px}
+.add-row .btn + .btn{margin-left:2px}

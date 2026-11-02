@@ -29,10 +29,14 @@ from .sources import DEFAULT_SOURCES, READERS
 
 
 def sources(cfg: dict) -> list[dict]:
-    """挂着的游戏的来源，去掉设置里关掉的（设置 → 活动日历）。"""
+    """挂着的游戏的来源，去掉设置里关掉的（设置 → 活动日历）。
+    11-02：仅关注（没挂脚本）的游戏也读，只读站外来源（游戏内的要进游戏，没有脚本做不了）。"""
     from .. import settings as S
+    from .. import watch as W
     off = set(S.get(cfg, "news")["disabled"])
-    return [s for s in DEFAULT_SOURCES if s["id"] not in off and s["game"] in cfg["games"]]
+    watch = set(W.active(cfg))
+    return [s for s in DEFAULT_SOURCES if s["id"] not in off
+            and (s["game"] in cfg["games"] or (s["game"] in watch and s["type"] != "ingame"))]
 
 
 VERSION_DAYS = {"genshin": 42, "starrail": 42}
@@ -447,7 +451,8 @@ def cycle_items(cfg: dict, back_days: int = 21, ahead_days: int = 50) -> list[di
     now = _now()
     lo, hi = now - timedelta(days=back_days), now + timedelta(days=ahead_days)
     out = []
-    for gid, g in cfg.get("games", {}).items():
+    from .. import watch as W
+    for gid, g in {**W.active(cfg), **cfg.get("games", {})}.items():  # 仅关注的游戏也算周期条目（11-02）
         for c in g.get("cycles") or DEFAULT_CYCLES.get(gid, []):
             try:
                 hh, mm = map(int, str(c.get("at", "04:00")).split(":"))

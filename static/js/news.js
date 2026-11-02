@@ -16,7 +16,7 @@ const leftText = bj => {
 };
 const gameName = gid => game(gid)?.name || gid;
 const shortName = gid => splitName(gameName(gid))[0];
-function newsColor(gid) { const g = game(gid) || { id: gid }; return tint(g, (S.state?.games || []).indexOf(game(gid))); }
+function newsColor(gid) { const g = game(gid) || { id: gid }; return tint(g, allGames().indexOf(game(gid))); }
 
 async function renderNews() {
   const keepY = S.route.view === 'news' ? window.scrollY : 0, keepG = S.route.view === 'news' ? ($('.gscroll')?.scrollTop || 0) : 0;
@@ -31,7 +31,7 @@ async function renderNews() {
   // 持续超过 60 天的是常驻说明（防沉迷、公平运营声明之类），不进日历和轮播
   const longTerm = it => it.start && it.end && bjMs(it.end) - bjMs(it.start) > 60 * 864e5;
   const items = (d.items || []).filter(it => !N.off.has(it.game) && !longTerm(it) && !it.hidden);
-  const gids = [...new Set((d.items || []).map(it => it.game))].sort((a, b) => (S.state.games.findIndex(g => g.id === a)) - (S.state.games.findIndex(g => g.id === b)));
+  const gids = [...new Set((d.items || []).map(it => it.game))].sort((a, b) => (allGames().findIndex(g => g.id === a)) - (allGames().findIndex(g => g.id === b)));
   const banners = newsBanners(d, N.focus);  // 点了上面某个游戏：轮播和日历都只看它的
   N.banners = banners; if (N.slide >= banners.length) N.slide = 0;
   const lastFetch = (d.sources || []).map(s => s.fetched).sort().pop() || '';
@@ -209,7 +209,7 @@ function ganttHtml(items, month, today) {
   const days = dates.length;
   const span = t1 - t0;
   const rows = items.filter(it => it.start && it.end && it.kind !== '常驻' && bjMs(it.end) > t0 && bjMs(it.start) < t1)
-    .sort((a, b) => (S.state.games.findIndex(g => g.id === a.game) - S.state.games.findIndex(g => g.id === b.game)) || (bjMs(a.start) - bjMs(b.start)));
+    .sort((a, b) => (allGames().findIndex(g => g.id === a.game) - allGames().findIndex(g => g.id === b.game)) || (bjMs(a.start) - bjMs(b.start)));
   const nowMs = nowBjMs();
   const pct = ms => Math.min(100, Math.max(0, (ms - t0) / span * 100));
   const hc = palName() === '高对比';

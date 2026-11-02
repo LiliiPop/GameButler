@@ -270,6 +270,14 @@ async function taskSkipMany(gid, keys) {
   } catch (e) { fail(e); }
 }
 document.addEventListener('contextmenu', e => {
+  const wr = e.target.closest?.('.b-row[data-watch]');  // 总览：仅关注的游戏（11-02）
+  if (wr) {
+    const ok = (game(wr.dataset.gid)?.done || 0) >= 1;
+    return showCtx(e, `${shortName(wr.dataset.gid)} · 仅关注`, [ok
+      ? `<button type="button" data-act="watch-done" data-gid="${esc(wr.dataset.gid)}" data-on="0"><i>↺</i>取消已完成</button>`
+      : `<button type="button" data-act="watch-done" data-gid="${esc(wr.dataset.gid)}" data-on="1"><i>✓</i>标记已完成</button>`,
+      `<button type="button" data-act="go-news" data-gid="${esc(wr.dataset.gid)}"><i>▦</i>看它的活动</button>`]);
+  }
   const row = e.target.closest?.('.b-row[data-gid]');  // 总览：这个游戏没做成的
   if (row) {
     const g = game(row.dataset.gid); const keys = ((repMap()[row.dataset.gid]?.attention) || g?.att || []).map(a => a.task);

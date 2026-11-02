@@ -119,7 +119,9 @@ const S = {
   runsCache: {},        // gid → /api/runs（运行面板用）
   wasRunning: false,
 };
-const game = gid => (S.state?.games || []).find(g => g.id === gid);
+// 11-02：仅关注（没挂脚本）的游戏在 S.state.watch；活动、总览、颜色都按「挂着的 + 仅关注的」算
+const allGames = () => [...(S.state?.games || []), ...(S.state?.watch || [])];
+const game = gid => allGames().find(g => g.id === gid);
 const nowBjMs = () => Date.now() + S.bjOffset;
 
 // ------------------------------------------------------------------ 提示与弹窗
