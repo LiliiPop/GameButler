@@ -235,11 +235,25 @@ function renderTop() {
 }
 // 无边框窗口（GameButler.exe 里）：顶栏当标题栏。拖空白处移动、双击最大化 / 还原，右上角 — □ ✕
 const WV = window.chrome?.webview;
-let WIN_MAX = false;
+let WIN_MAX = false, WV_PICK = false;
+const PICKS = new Map();
+// 选文件夹（11-02）：在 GameButler.exe 的窗口里由启动器自己弹（挂在管家窗口上，不会被挡住）；在浏览器里打开时由后台弹
+async function pickFolder(title) {
+  if (WV && WV_PICK) {
+    const id = String(Date.now()) + Math.random().toString(36).slice(2, 6);
+    return new Promise(res => { PICKS.set(id, res); WV.postMessage(`pick:${id}\n${title}`); });
+  }
+  toast('在电脑上弹出了文件夹选择窗口；也可以在下一步直接粘贴路径');
+  return (await api('POST', '/api/browse', { title })).path || '';
+}
 if (WV) {
   document.documentElement.classList.add('frameless');
   WV.addEventListener('message', e => {
-    const m = e.data === 'max';
+    const d = String(e.data || '');
+    if (d === 'cap:pick') { WV_PICK = true; return; }  // 11-02：启动器能自己弹选文件夹窗口
+    if (d.startsWith('pick:')) { const nl = d.indexOf('\n'); const id = d.slice(5, nl < 0 ? undefined : nl); const cb = PICKS.get(id); if (cb) { PICKS.delete(id); cb(nl < 0 ? '' : d.slice(nl + 1)); } return; }
+    if (d !== 'max' && d !== 'normal') return;
+    const m = d === 'max';
     if (m === WIN_MAX) return;
     WIN_MAX = m; document.documentElement.classList.toggle('win-max', m);
     if ($('#top')?.innerHTML) renderTop();

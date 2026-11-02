@@ -75,9 +75,8 @@ async function toolAct(act, el) {
   };
   try {
     if (act === 'tool-browse') {
-      toast('在电脑上弹出了文件夹选择窗口（可能在管家窗口后面）');
-      const r = await api('POST', '/api/browse', { title: `选择 ${t.name} 用的工具${t.field === 'exe' ? '程序所在的文件夹' : '文件夹'}` });
-      if (r.path) await setPath(r.path);
+      const path = await pickFolder(`选择 ${t.name} 用的工具${t.field === 'exe' ? '程序所在的文件夹' : '文件夹'}`);
+      if (path) await setPath(path);
     } else if (act === 'tool-scan') {
       const r = await api('POST', `/api/games/${gid}/scan`);
       if (!r.found.length) return toast('常见位置没找到，请用「换文件夹」', true);
@@ -95,10 +94,9 @@ async function toolAct(act, el) {
     } else if (act === 'tool-emu-close') {
       await api('PUT', '/api/settings/emulator', { close: el.dataset.v }); await redraw();
     } else if (act === 'tool-mumu') {
-      toast('在电脑上弹出了文件夹选择窗口');
-      const r = await api('POST', '/api/browse', { title: '选择 MuMu 模拟器的安装文件夹（里面有 nx_main）' });
-      if (!r.path) return;
-      await api('PUT', '/api/settings/emulator', { mumu_dir: r.path }); await redraw();
+      const path = await pickFolder('选择 MuMu 模拟器的安装文件夹（里面有 nx_main）');
+      if (!path) return;
+      await api('PUT', '/api/settings/emulator', { mumu_dir: path }); await redraw();
     }
   } catch (e) { fail(e); }
 }
@@ -149,9 +147,8 @@ async function openAddScript(preset) {
       body: '<div class="small">已经装好的脚本：选它所在的文件夹（MaaFramework 项目选有 interface.json 的那层），或命令行脚本的程序。<br>还没装的：从常见脚本列表下载（在你的电脑上从 GitHub 下载最新版）。</div>' });
     if (!how) return;
     if (how.alt) return openCatalog();
-    toast('在电脑上弹出了文件夹选择窗口（可能在管家窗口后面）；也可以在下面直接粘贴路径');
     let path = '';
-    try { path = (await api('POST', '/api/browse', { title: '选择脚本所在的文件夹（MaaFramework 项目选有 interface.json 的那层）' })).path || ''; } catch (e) { fail(e); }
+    try { path = await pickFolder('选择脚本所在的文件夹（MaaFramework 项目选有 interface.json 的那层）'); } catch (e) { fail(e); }
     p2 = await modal({ title: '添加脚本', body: '<div class="small muted">脚本所在的文件夹，或命令行脚本的程序路径：</div>', input: { label: '', value: path, placeholder: 'F:\\M9A 或 D:\\tools\\run.bat' }, ok: '识别' });
   }
   if (!p2 || p2 === true) return;
@@ -219,8 +216,7 @@ async function openCatalog() {
     onMount: (m, setVal) => { m.addEventListener('click', e => { const b = e.target.closest('[data-pick]'); if (b) m._pick = b.dataset.pick; }, true); setVal(() => m._pick); } });
   if (!pick || pick === true) return;
   const it = d.items.find(x => x.id === pick);
-  toast('选一个放脚本的文件夹（会在里面新建一个子文件夹）');
-  let base = ''; try { base = (await api('POST', '/api/browse', { title: `选择 ${it.name} 放在哪里` })).path || ''; } catch (e) { fail(e); }
+  let base = ''; try { base = await pickFolder(`选择 ${it.name} 放在哪里（会在里面新建一个子文件夹）`); } catch (e) { fail(e); }
   if (!base) return;
   const dest = base.replace(/[\\/]+$/, '') + '\\' + it.name.replace(/[（）() ]+/g, '_').replace(/_+$/, '');
   let job; try { job = (await api('POST', '/api/catalog/download', { id: pick, dest })).job; } catch (e) { return fail(e); }

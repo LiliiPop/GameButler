@@ -108,7 +108,19 @@ def _browse_native(title: str) -> str:
             user32.GetForegroundWindow.restype = wintypes.HWND
             name = ctypes.create_unicode_buffer(260)
             # 挂在当前最前面的窗口（管家窗口）上：弹在它上面，不会躲到后面
-            bi = BROWSEINFOW(user32.GetForegroundWindow(), None, name, title, 0x0001 | 0x0010 | 0x0040, None, 0, 0)
+            # 11-02：后台进程弹的窗口 Windows 不让它自己跑到最前面 → 窗口一出来就设成置顶、再拉到前台
+            CB = ctypes.WINFUNCTYPE(ctypes.c_int, wintypes.HWND, wintypes.UINT, wintypes.LPARAM, wintypes.LPARAM)
+            user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+            user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+
+            def on_msg(hwnd, msg, lp, data):
+                if msg == 1:  # BFFM_INITIALIZED
+                    user32.SetWindowPos(hwnd, wintypes.HWND(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)  # HWND_TOPMOST, 不改位置大小, 显示
+                    user32.SetForegroundWindow(hwnd)
+                return 0
+            cb = CB(on_msg)
+            bi = BROWSEINFOW(user32.GetForegroundWindow(), None, name, title, 0x0001 | 0x0010 | 0x0040,
+                             ctypes.cast(cb, ctypes.c_void_p), 0, 0)
             pidl = shell32.SHBrowseForFolderW(ctypes.byref(bi))  # 只要文件夹 | 有输入框 | 新样式（能新建文件夹）
             if not pidl:
                 out["path"] = ""

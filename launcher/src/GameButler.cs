@@ -594,8 +594,9 @@ namespace GameButler
                         case "max": ToggleMax(); break;
                         case "min": WindowState = FormWindowState.Minimized; break;
                         case "close": Close(); break;
-                        case "hello": PostState(); break;
+                        case "hello": PostState(); Post("cap:pick"); break;  // 11-02：告诉页面这个启动器能自己弹选文件夹窗口
                         default:
+                            if (msg.StartsWith("pick:")) { PickFolder(msg.Substring(5)); break; }
                             int hit;
                             if (msg.StartsWith("size:") && int.TryParse(msg.Substring(5), out hit)) BeginSize(hit);
                             break;
@@ -656,6 +657,32 @@ namespace GameButler
             WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
         }
 
+        void Post(string m)
+        {
+            try { if (web != null && web.CoreWebView2 != null) web.CoreWebView2.PostWebMessageAsString(m); }
+            catch { }
+        }
+
+        // 选文件夹（11-02）：由启动器自己弹（挂在这个窗口上），不会被管家窗口挡住。消息「pick:<编号>\n<标题>」，
+        // 回「pick:<编号>\n<路径>」（取消 = 空路径）。新样式窗口（能粘贴路径）打不开时退回老的文件夹树
+        void PickFolder(string arg)
+        {
+            int nl = arg.IndexOf('\n');
+            string id = nl < 0 ? arg : arg.Substring(0, nl), title = nl < 0 ? "选择文件夹" : arg.Substring(nl + 1);
+            string path = "";
+            try { path = FolderPicker.Pick(Handle, title); }
+            catch
+            {
+                try
+                {
+                    using (var d = new FolderBrowserDialog { Description = title, ShowNewFolderButton = true })
+                        if (d.ShowDialog(this) == DialogResult.OK) path = d.SelectedPath;
+                }
+                catch { }
+            }
+            Post("pick:" + id + "\n" + (path ?? ""));
+        }
+
         void PostState()
         {
             try { if (web != null && web.CoreWebView2 != null) web.CoreWebView2.PostWebMessageAsString(maxed ? "max" : "normal"); }
@@ -684,6 +711,67 @@ namespace GameButler
     }
 
     // ---------- 托盘 + 后台进程管理 ----------
+    // Windows 的新样式选文件夹窗口（IFileOpenDialog + FOS_PICKFOLDERS），和资源管理器一样有地址栏、能粘贴路径
+    static class FolderPicker
+    {
+        [System.Runtime.InteropServices.ComImport, System.Runtime.InteropServices.Guid("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7")]
+        class FileOpenDialogRCW { }
+
+        [System.Runtime.InteropServices.ComImport, System.Runtime.InteropServices.Guid("42f85136-db7e-439c-85f1-e4075d135fc8"),
+         System.Runtime.InteropServices.InterfaceType(System.Runtime.InteropServices.ComInterfaceType.InterfaceIsIUnknown)]
+        interface IFileDialog
+        {
+            [System.Runtime.InteropServices.PreserveSig] int Show(IntPtr parent);
+            void SetFileTypes(uint n, IntPtr spec);
+            void SetFileTypeIndex(uint i);
+            void GetFileTypeIndex(out uint i);
+            void Advise(IntPtr sink, out uint cookie);
+            void Unadvise(uint cookie);
+            void SetOptions(uint fos);
+            void GetOptions(out uint fos);
+            void SetDefaultFolder(IShellItem si);
+            void SetFolder(IShellItem si);
+            void GetFolder(out IShellItem si);
+            void GetCurrentSelection(out IShellItem si);
+            void SetFileName([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string name);
+            void GetFileName([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] out string name);
+            void SetTitle([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string title);
+            void SetOkButtonLabel([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string text);
+            void SetFileNameLabel([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string text);
+            void GetResult(out IShellItem si);
+        }
+
+        [System.Runtime.InteropServices.ComImport, System.Runtime.InteropServices.Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE"),
+         System.Runtime.InteropServices.InterfaceType(System.Runtime.InteropServices.ComInterfaceType.InterfaceIsIUnknown)]
+        interface IShellItem
+        {
+            void BindToHandler(IntPtr pbc, ref Guid bhid, ref Guid riid, out IntPtr ppv);
+            void GetParent(out IShellItem si);
+            void GetDisplayName(uint sigdn, [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] out string name);
+        }
+
+        const uint FOS_NOCHANGEDIR = 0x8, FOS_PICKFOLDERS = 0x20, FOS_FORCEFILESYSTEM = 0x40, SIGDN_FILESYSPATH = 0x80058000;
+        const int ERROR_CANCELLED = unchecked((int)0x800704C7);
+
+        public static string Pick(IntPtr owner, string title)
+        {
+            var dlg = (IFileDialog)new FileOpenDialogRCW();
+            try
+            {
+                uint o; dlg.GetOptions(out o);
+                dlg.SetOptions(o | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR);
+                dlg.SetTitle(title);
+                int hr = dlg.Show(owner);
+                if (hr == ERROR_CANCELLED) return "";
+                if (hr != 0) System.Runtime.InteropServices.Marshal.ThrowExceptionForHR(hr);
+                IShellItem item; dlg.GetResult(out item);
+                string path; item.GetDisplayName(SIGDN_FILESYSPATH, out path);
+                return path ?? "";
+            }
+            finally { System.Runtime.InteropServices.Marshal.ReleaseComObject(dlg); }
+        }
+    }
+
     class ButlerApp : ApplicationContext
     {
         public readonly Icon AppIcon;
