@@ -57,23 +57,83 @@ def scan(gid: str, cfg: dict) -> list[str]:
 
 
 def browse(title: str = "选择文件夹") -> str:
-    """在电脑上弹出文件夹选择窗口，返回选中的路径（取消返回空）。"""
+    """在电脑上弹出文件夹选择窗口，返回选中的路径（取消返回空）。
+    11-02：直接调 Windows 的选文件夹窗口（shell32.SHBrowseForFolderW），不再经过 PowerShell——
+    有的电脑上 PowerShell 不在 PATH 里 / 被安全软件拦下（「系统找不到指定的文件」）。调不起来时再用完整路径试 PowerShell。"""
     if os.name != "nt":
         return ""
+    try:
+        return _browse_native(title)
+    except ValueError:  # 选了「此电脑」之类：直接告诉你
+        raise
+    except Exception as e:  # 极少见：再试 PowerShell（用完整路径，不靠 PATH）
+        first = f"{type(e).__name__}: {e}"
+    ps_exe = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
     ps = ("Add-Type -AssemblyName System.Windows.Forms;"
           "$f=New-Object System.Windows.Forms.FolderBrowserDialog;"
-          f"$f.Description='{title}';$f.ShowNewFolderButton=$false;"
+          f"$f.Description='{title}';$f.ShowNewFolderButton=$true;"
           "$w=New-Object System.Windows.Forms.Form;$w.TopMost=$true;"
           "if($f.ShowDialog($w) -eq 'OK'){[Console]::OutputEncoding=[Text.Encoding]::UTF8;Write-Output $f.SelectedPath}")
     try:
-        p = subprocess.run(["powershell", "-NoProfile", "-STA", "-Command", ps], capture_output=True, timeout=600,
-                           creationflags=NO_WINDOW)
+        p = subprocess.run([ps_exe if os.path.exists(ps_exe) else "powershell", "-NoProfile", "-STA", "-Command", ps],
+                           capture_output=True, timeout=600, creationflags=NO_WINDOW)
     except (OSError, subprocess.TimeoutExpired) as e:
-        raise RuntimeError(f"选择文件夹的窗口打不开：{type(e).__name__}: {e}") from e
+        raise RuntimeError(f"选择文件夹的窗口打不开（{first}；{type(e).__name__}: {e}）。可以直接把路径粘贴进输入框") from e
     if p.returncode != 0:
         err = p.stderr.decode("utf-8", errors="replace").strip()[:300]
         raise RuntimeError(f"选择文件夹的窗口打不开：{err or f'退出代码 {p.returncode}'}；可以直接把路径粘贴进输入框")
     return p.stdout.decode("utf-8", errors="replace").strip()  # 空 = 你点了取消
+
+
+def _browse_native(title: str) -> str:
+    """Windows 自带的选文件夹窗口（新样式：可以新建文件夹、可以粘贴路径）。在单独的线程里跑（要单线程套间 COM）。"""
+    import ctypes
+    import threading
+    from ctypes import wintypes
+
+    class BROWSEINFOW(ctypes.Structure):
+        _fields_ = [("hwndOwner", wintypes.HWND), ("pidlRoot", ctypes.c_void_p), ("pszDisplayName", wintypes.LPWSTR),
+                    ("lpszTitle", wintypes.LPCWSTR), ("ulFlags", wintypes.UINT), ("lpfn", ctypes.c_void_p),
+                    ("lParam", wintypes.LPARAM), ("iImage", ctypes.c_int)]
+    out: dict = {}
+
+    def run():
+        try:
+            shell32, ole32, user32 = ctypes.windll.shell32, ctypes.windll.ole32, ctypes.windll.user32
+            ole32.CoInitializeEx(None, 0x2)  # COINIT_APARTMENTTHREADED
+            shell32.SHBrowseForFolderW.restype = ctypes.c_void_p
+            shell32.SHBrowseForFolderW.argtypes = [ctypes.POINTER(BROWSEINFOW)]
+            shell32.SHGetPathFromIDListW.argtypes = [ctypes.c_void_p, wintypes.LPWSTR]
+            ole32.CoTaskMemFree.argtypes = [ctypes.c_void_p]
+            user32.GetForegroundWindow.restype = wintypes.HWND
+            name = ctypes.create_unicode_buffer(260)
+            # 挂在当前最前面的窗口（管家窗口）上：弹在它上面，不会躲到后面
+            bi = BROWSEINFOW(user32.GetForegroundWindow(), None, name, title, 0x0001 | 0x0010 | 0x0040, None, 0, 0)
+            pidl = shell32.SHBrowseForFolderW(ctypes.byref(bi))  # 只要文件夹 | 有输入框 | 新样式（能新建文件夹）
+            if not pidl:
+                out["path"] = ""
+                return
+            buf = ctypes.create_unicode_buffer(32768)
+            ok = shell32.SHGetPathFromIDListW(pidl, buf)
+            ole32.CoTaskMemFree(pidl)
+            out["path"] = buf.value if ok else ""
+            if not ok:
+                out["error"] = "选的不是硬盘上的文件夹（例如「此电脑」「网络」），请选一个具体的文件夹"
+        except Exception as e:
+            out["exc"] = e
+        finally:
+            try:
+                ctypes.windll.ole32.CoUninitialize()
+            except Exception:
+                pass
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    t.join(900)
+    if "exc" in out:
+        raise out["exc"]
+    if out.get("error"):
+        raise ValueError(out["error"])
+    return out.get("path", "")
 
 
 def _vm_resolutions(mumu_dir: str) -> dict:

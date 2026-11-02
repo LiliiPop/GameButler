@@ -79,6 +79,7 @@ document.addEventListener('click', async e => {
     case 'routine-pick': routineOp('pick', el.dataset.name); break;
     case 'routine-goto': routineOp('goto', el.dataset.name); break;
     case 'routine-new': routineOp('new'); break;
+    case 'routine-import': importToolRoutines(S.ed?.gid); break;
     case 'routine-rename': routineOp('rename'); break;
     case 'routine-del': routineOp('del'); break;
     case 'save': save(); break;

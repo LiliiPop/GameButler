@@ -337,3 +337,25 @@ def _(api, m, q, b):
     bt = api.enqueue(sched_day(), {"game": gid, "tasks": tasks, "when": {"kind": "now"}, "rerun": True,
                                     "label": "重新获取题图", "hires": res})
     return {"ok": True, "batch": bt, "resolution": res}
+
+
+# ---------------------------------------------------------------- 导入工具自带的预设（11-02：挂上以后也能导入）
+@route("GET", r"/api/games/(\w+)/tool-routines")
+def _(api, m, q, b):
+    gid = m.group(1)
+    api.game(gid)
+    have = set(api.store.routines(gid)["routines"])
+    ad = api.adapter(gid)
+    tr = ad.tool_routines() if hasattr(ad, "tool_routines") else {}
+    return {"routines": [{"name": k, "count": len(v), "exists": k in have} for k, v in tr.items()]}
+
+
+@route("POST", r"/api/games/(\w+)/import-routines")
+def _(api, m, q, b):
+    from .. import mount as MT
+    gid = m.group(1)
+    api.game(gid)
+    names = b.get("names")
+    got = MT.import_routines(api.cfg, gid, [str(x) for x in names] if isinstance(names, list) else None)
+    api.sched.wake()
+    return {"ok": True, "imported": got}

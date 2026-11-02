@@ -7,6 +7,7 @@ S.games = null; S.emus = null;
 async function loadGames() {
   const [g, e, w] = await Promise.all([api('GET', '/api/games'), api('GET', '/api/emulators'), api('GET', '/api/watch')]);
   S.games = g; S.emus = e; S.watchCat = w.games || [];
+  (g.games || []).filter(t => t.autofixed).forEach(t => toast(`${splitName(t.name)[0]}：原来的路径找不到工具，已自动找到 ${t.autofixed}`));
   return g;
 }
 function gameRow(t) {
@@ -25,7 +26,7 @@ function gameRow(t) {
       <div class="tr-acts"><button class="btn xs" data-act="tool-browse" data-gid="${esc(t.id)}">换文件夹</button>${t.preset ? `<button class="btn xs" data-act="tool-scan" data-gid="${esc(t.id)}">自动查找</button>` : ''}
         <button class="btn xs ghost" data-act="tool-check" data-gid="${esc(t.id)}" title="查一遍：文件夹和工具文件在不在、模拟器实例对不对、分辨率合不合要求">检查</button>${t.url ? `<a class="btn xs ghost" href="https://github.com/${esc(t.url)}" target="_blank" rel="noopener">去下载</a>` : ''}${emuSel}</div>
       ${t.screen ? `<div class="xsmall faint">要求：${esc(t.screen)}</div>` : ''}
-      ${!t.available && t.message ? `<div class="xsmall bwarn">${ICON.warn} ${esc(t.message)}</div>` : ''}
+      ${!t.available && t.message ? `<div class="xsmall bwarn">${ICON.warn} ${esc(t.message)}${t.preset_id ? '（自动查找没找到：点「换文件夹」手动选）' : '（点「换文件夹」重新选）'}</div>` : ''}
       <div class="tr-check" id="tc-${esc(t.id)}"></div></div>
   </div>`;
 }
@@ -157,8 +158,13 @@ async function openAddScript(preset) {
   let d; try { d = await api('POST', '/api/games/detect', { path: p2 }); } catch (e) { return fail(e); }
   if (!d.ok) return toast(d.error || '没认出来', true);
   if (d.restore) {  // 以前挂过、取消了：恢复原来那一条（设置、计划、记录都接上）
-    if (!(await confirmBox(`重新挂载「${esc(d.restore.name)}」？`, '这个脚本以前挂过。重新挂载会恢复原来的设置、计划和记录；路径变了的话只更新路径。', '重新挂载'))) return;
-    try { const r = await api('POST', '/api/games', { ...d }); toast(`已重新挂载「${d.restore.name}」`); await afterMountChange(); location.hash = `#/g/${r.id}/today`; } catch (e) { fail(e); }
+    const tr = d.tool_routines || [];
+    const ans = await modal({ title: `重新挂载「${d.restore.name}」？`, ok: '重新挂载',
+      body: `<div class="small">这个脚本以前挂过。重新挂载会恢复原来的设置、计划和记录；路径变了的话只更新路径。</div>
+        ${tr.length ? `<label class="fld chk" style="margin-top:10px"><input type="checkbox" id="rs-import"> 一同导入工具自带的预设：${esc(tr.join('、'))}</label>` : ''}`,
+      onMount: (m, setVal) => setVal(() => ({ imp: !!m.querySelector('#rs-import')?.checked })) });
+    if (!ans) return;
+    try { const r = await api('POST', '/api/games', { ...d, import_tool_routines: !!ans.imp }); toast(`已重新挂载「${d.restore.name}」`); await afterMountChange(); location.hash = `#/g/${r.id}/today`; } catch (e) { fail(e); }
     return;
   }
   S.emus = S.emus || await api('GET', '/api/emulators');

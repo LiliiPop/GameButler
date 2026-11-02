@@ -20,6 +20,7 @@ import copy
 import hashlib
 import os
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -216,6 +217,12 @@ def add(cfg: dict, info: dict) -> dict:
             g["project_name"] = info["project_name"]
         g["followed"] = True
         GD.save(cfg, same, g)
+        autofix(cfg, same, force=True)
+        if info.get("import_tool_routines"):  # 11-02：重新挂载时也能选「一同导入工具自带的预设」
+            try:
+                import_routines(cfg, same, None)
+            except Exception:
+                pass
         return {"id": same, "restored": True}
     pr = GD.match_preset(info)
     g = copy.deepcopy(pr["config"]) if pr and pr.get("config") else {}
@@ -238,6 +245,8 @@ def add(cfg: dict, info: dict) -> dict:
     gid = want if want and want not in recs else _slug(info.get("project_name") or g["name"], recs)
     g["order"] = max([r.get("order", 0) for r in recs.values()] + [0]) + 1
     GD.save(cfg, gid, g)
+    autofix(cfg, gid, force=True)  # 11-02：挂上后找不到工具文件（选错了一层之类）：先自动查找一次
+    g = GD.record(cfg, gid)
     _first_setup(cfg, gid, g)
     return {"id": gid, "restored": False}
 
@@ -331,10 +340,64 @@ def delete(cfg: dict, gid: str) -> dict:
     return {"ok": True}
 
 
+_FIX_AT: dict = {}
+
+
+def autofix(cfg: dict, gid: str, force: bool = False) -> str:
+    """工具路径不对（找不到 interface.json / 程序）时，按预设里写的常见文件夹名自动查找，找到就改过来。
+    返回改成的路径；没找到 / 不用改返回空。同一个游戏 10 分钟内只找一次（force 除外）。"""
+    from . import games as G
+    from . import tools as T
+    try:
+        g = GD.record(cfg, gid)
+    except KeyError:
+        return ""
+    if G.available(g)[0] or not g.get("preset") or not g.get("followed", True):
+        return ""
+    if not force and time.time() - _FIX_AT.get(gid, 0) < 600:
+        return ""
+    _FIX_AT[gid] = time.time()
+    field = G.type_class(g).path_field
+    for p in T.scan(gid, cfg):
+        if G.available({**g, field: p})[0]:
+            g[field] = p
+            GD.save(cfg, gid, g)
+            return p
+    return ""
+
+
+def import_routines(cfg: dict, gid: str, names: list[str] | None) -> list[str]:
+    """把工具自带的预设导入成任务预设（11-02：挂上以后也能导入）。names = None 导入全部。
+    和已有的同名时加「（导入）」。返回导入后的名字。"""
+    from . import games as G
+    from .store import Store
+    st = Store(cfg["machine"]["data_dir"])
+    ad = G.adapter(cfg, gid)
+    tr = ad.tool_routines() if hasattr(ad, "tool_routines") else {}
+    doc = st.routines(gid)
+    got = []
+    for name, items in tr.items():
+        if names is not None and name not in names:
+            continue
+        nm, k = name, 2
+        while nm in doc["routines"]:
+            nm = f"{name}（导入{'' if k == 2 else k - 1}）"
+            k += 1
+        doc["routines"][nm] = {"tasks": items}
+        got.append(nm)
+    if got:
+        st.save_routines(gid, doc)
+    return got
+
+
 def listing(cfg: dict) -> list[dict]:
     """设置页「工具与游戏」：挂着的和取消挂载的都列出来。"""
     from . import games as G
     out = []
+    for gid in list(GD.all_records(cfg)):  # 11-02：路径不对的先自动查找一次
+        fixed = autofix(cfg, gid)
+        if fixed:
+            _FIXED[gid] = fixed
     for gid, g in GD.all_records(cfg).items():
         ok, why = G.available(g)
         on = g.get("followed", True)
@@ -345,5 +408,9 @@ def listing(cfg: dict) -> list[dict]:
                     "field": cls.path_field, "emulator": g.get("emulator", ""),
                     "refresh": g["refresh"], "preset": (pr or {}).get("name", ""), "url": (pr or {}).get("repo", ""),
                     "screen": (pr or {}).get("screen", ""), "commands": cls.user_commands(g),
-                    "needs_emulator": cls.uses_emulator(g)})
+                    "needs_emulator": cls.uses_emulator(g), "autofixed": _FIXED.pop(gid, ""),
+                    "preset_id": g.get("preset", "")})
     return out
+
+
+_FIXED: dict = {}

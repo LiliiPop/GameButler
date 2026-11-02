@@ -109,6 +109,24 @@ function rerunBad() {
   startGame(ed.gid, keys);
 }
 
+// 导入工具自带的预设（11-02：挂上以后也能导入；MaaFramework 项目的 preset、MFA 的实例、工具默认勾选；BetterGI 的一条龙）
+const importBtn = g => ['maa', 'bettergi'].includes(g?.kind) ? '<button class="btn xs" data-act="routine-import" title="把工具里自带的预设做成任务预设">导入工具自带的预设</button>' : '';
+async function importToolRoutines(gid) {
+  let r; try { r = await api('GET', `/api/games/${encodeURIComponent(gid)}/tool-routines`); } catch (e) { return fail(e); }
+  const list = r.routines || [];
+  if (!list.length) return toast('这个工具里没有自带的预设', true);
+  const v = await modal({ title: '导入工具自带的预设', ok: '导入',
+    body: `<div class="small muted" style="margin-bottom:10px">勾上的做成任务预设（和已有的同名时，名字后面加「（导入）」）。</div>
+      ${list.map((x, i) => `<label class="rad"><input type="checkbox" data-i="${i}" ${x.exists ? '' : 'checked'}> ${esc(x.name)} <span class="xsmall faint">${x.count} 项${x.exists ? ' · 已有同名的任务预设' : ''}</span></label>`).join('')}`,
+    onMount: (m, setVal) => setVal(() => [...m.querySelectorAll('input[data-i]:checked')].map(c => list[+c.dataset.i].name)) });
+  if (!Array.isArray(v) || !v.length) return;
+  try {
+    const res = await api('POST', `/api/games/${encodeURIComponent(gid)}/import-routines`, { names: v });
+    toast(res.imported.length ? `已导入：${res.imported.join('、')}` : '没有导入');
+    await loadState();
+    if (S.ed?.gid === gid) { if (res.imported[0]) S.ed.routineName = res.imported[0]; await loadEditor(gid, S.ed.tab); renderGame(); }
+  } catch (e) { fail(e); }
+}
 // 右侧任务预设卡片：任务预设列表，每套下面写着它的定时（点定时改，「＋ 定时」加）
 const ruleText = u => typeof ruleChip === 'function' ? ruleChip(u) : u.text;
 function routineCard(g) {
@@ -123,15 +141,15 @@ function routineCard(g) {
   if (onRoutine && cur) {
     acts = `${presets.length ? `<select class="sel" style="max-width:none" data-act="apply-src" aria-label="从 MAA 预设换一套…"><option value="" selected disabled>从 MAA 预设换一套…</option>
         <optgroup label="MAA 自带预设">${presets.map(p => `<option value="p:${esc(p.name)}" ${p.error ? `disabled title="${esc(p.error)}"` : ''}>${esc(p.name)}${p.error ? `（不能用：${esc(p.error)}）` : ''}</option>`).join('')}</optgroup></select>` : ''}
-      <div class="rc-btns"><button class="btn xs" data-act="routine-new">另存为新预设</button><button class="btn xs" data-act="routine-rename">重命名</button><button class="btn xs" data-act="routine-del">删除</button></div>`;
+      <div class="rc-btns"><button class="btn xs" data-act="routine-new">另存为新预设</button><button class="btn xs" data-act="routine-rename">重命名</button><button class="btn xs" data-act="routine-del">删除</button>${importBtn(g)}</div>`;
   } else if (onRoutine) {
-    acts = '<div class="rc-btns"><button class="btn xs" data-act="routine-new">新建一套</button></div>';
+    acts = `<div class="rc-btns"><button class="btn xs" data-act="routine-new">新建一套</button>${importBtn(g)}</div>`;
   }
   const list = names.map(n => {
     const on = n === cur;
     const act = onRoutine ? `data-act="routine-pick"` : `data-act="routine-goto"`;
     return `<a href="#/g/${esc(g.id)}/routine" ${act} data-name="${esc(n)}" class="${on ? 'on' : ''}" ${on ? 'aria-current="page"' : ''}><span>${esc(n)}</span><span class="xsmall faint num">${(doc.routines[n].tasks || []).length} 项</span></a>`;
-  }).join('') || '<div class="xsmall faint">还没有任务预设：点「新建一套」，或在挂载时导入工具自带的预设</div>';
+  }).join('') || '<div class="xsmall faint">还没有任务预设：点「新建一套」，或「导入工具自带的预设」</div>';
   return `<section data-card="routine" class="panel glass navcard ${onRoutine ? 'on' : 'thin'}" ${onRoutine ? 'aria-current="page"' : `data-act="goto-tab" data-tab="routine" role="link" tabindex="0" aria-label="任务预设"`}><div class="ph"><h3>任务预设</h3>${onRoutine ? '<span class="xsmall faint">正在管理</span>' : ICON.right}</div>
     ${top}<div class="rlist">${list}</div>${acts ? `<div class="rc-acts">${acts}</div>` : ''}</section>`;
 }
