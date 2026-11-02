@@ -1352,3 +1352,6 @@ body.sorting,body.sorting *{cursor:grabbing!important;user-select:none}
 .watch-list .wl-row:last-child{border-bottom:0}
 .watch-list .wl-row b{font-size:14px}
 .add-row .btn + .btn{margin-left:2px}
+/* 米游社账号（11-02）：每个游戏一行 */
+.mys-g{margin-top:6px;font-size:13px}
+.mys-g > b{margin-right:8px}

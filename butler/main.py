@@ -132,6 +132,22 @@ class _Printer:
 
 
 # ---------------------------------------------------------------- 运行进程
+def run_mys(ctx, mys_gid: str, it: dict) -> dict:
+    """米游社签到（butler/mys.py）：所有登录的米游社账号下这个游戏的角色都签一次。"""
+    from . import mys
+    from .store import item_key
+    key = item_key(it)
+    ctx.emit("task_start", task=key, attempt=1)
+    try:
+        ok, why = mys.sign_all(ctx.cfg, mys_gid)
+    except Exception as e:
+        ok, why = False, f"签到出错：{type(e).__name__}: {e}"
+    ev = {"task": key, "attempt": 1, "result": "succeeded" if ok else "failed", "detail": why,
+          "minutes": 0, "focus": [], "flags": [], "shots": []}
+    ctx.emit("task_end", **ev)
+    return {**ev, "attempts": 1}
+
+
 def run_game(cfg, gid: str, items: list[dict], store: Store, rs: RunState, hires: str = "") -> dict:
     g = cfg["games"][gid]
     print(f"\n======== {g['name']} ========")
@@ -140,7 +156,20 @@ def run_game(cfg, gid: str, items: list[dict], store: Store, rs: RunState, hires
     ctx = RunContext(cfg, gid, day, store, rs)
     ctx.hires = hires  # 「重新获取题图」：模拟器临时调高分辨率（games.hires_session）
     try:
-        summary = G.adapter(cfg, gid).run(items, ctx)
+        ad = G.adapter(cfg, gid)
+        mys_res = []
+        if ad.mys_game():  # 11-02：米游社签到由管家自己做（崩铁、未定事件簿），其余照旧交给工具
+            for it in [x for x in items if x["task"] == G.MYS_TASK]:
+                mys_res.append(run_mys(ctx, ad.mys_game(), it))
+            items = [x for x in items if x["task"] != G.MYS_TASK]
+        if not [x for x in items if x["task"] != g.get("recovery_task")] and mys_res:
+            items = []  # 只剩「启动游戏」：这次只有签到，不用开游戏
+        if items or not mys_res:
+            summary = ad.run(items, ctx)
+            summary["results"] = mys_res + list(summary.get("results") or [])
+            summary["ok"] = bool(summary.get("ok")) and all(r["result"] == "succeeded" for r in mys_res)
+        else:
+            summary = {"ok": all(r["result"] == "succeeded" for r in mys_res), "results": mys_res}
         if not ctx.got_summary:  # 非 MAA 工具：补一条结束记录，运行记录里才算「已结束」
             ctx.write({"ts": now_bj(), "bj": now_bj(), "event": "summary", "ok": bool(summary.get("ok")),
                        "stopped": bool(summary.get("stopped")), "results": summary.get("results", [])})

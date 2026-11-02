@@ -89,12 +89,28 @@ def _make(cfg: dict, gid: str, g: dict):
 
 
 # =====================================================================================
+MYS_TASK = "米游社签到"
+
+
 class ReservedGame:
     """预留：还没接入的游戏，只在界面上占位。也是各工具的基类：下面的默认值 = 「这个工具不支持」。"""
     path_field = "exe"          # 游戏记录里工具路径存在哪个字段
 
     def __init__(self, cfg, gid):
         self.cfg, self.gid, self.g = cfg, gid, cfg["games"][gid]
+
+    # ---------- 米游社签到（11-02）：管家自己做的任务，不交给工具；崩铁、未定事件簿（原神在 BetterGI 的 pre_tasks 里） ----------
+    def mys_game(self) -> str:
+        from . import gamesdb as GD
+        from . import mys
+        k = self.gid if self.gid in mys.GAMES else ((GD.preset(self.g["preset"]) or {}).get("gid", "") if self.g.get("preset") else "")
+        return k if k in mys.GAMES and k != "genshin" else ""
+
+    def mys_entry(self) -> dict:
+        return {"name": MYS_TASK, "label": "", "entry": "@mys",
+                "description": "米游社「每日签到」福利，由管家自己签（不打开游戏和工具）。先在「设置 → 米游社账号」里用米游社 App 扫码登录"
+                               "（原神、崩铁、未定事件簿共用一个登录）。",
+                "options": [], "mfa_choices": {}, "default_check": False, "placeholder": False}
 
     # ---------- 记录层（类方法：取消挂载的记录也能用） ----------
     @classmethod
@@ -427,11 +443,13 @@ class MaaGame(ReservedGame):
         return self._proj
 
     def task_names(self) -> list[str]:
-        return self.project().task_names()
+        return self.project().task_names() + ([MYS_TASK] if self.mys_game() else [])
 
     def schema(self) -> dict:
         s = self.project().schema()
         s["reserved"] = False
+        if self.mys_game():
+            s["tasks"] = list(s["tasks"]) + [self.mys_entry()]
         s["tasks"] = self.decorate(s["tasks"])  # 任务库里全部任务都在；停用 / 未实测 / 提醒标出来，隐藏的去掉
         # 11-02：读公告 / 读活动中心 / 读抽卡资源不在任务库和预设里出现（由设置 → 游戏内读取决定什么时候顺带做）
         s["tasks"] = [t for t in s["tasks"] if t["name"] not in (NOTICE_TASK, EVENTS_TASK, GACHA_TASK)]
@@ -762,7 +780,7 @@ class CommandGame(ReservedGame):
         return self.g.get("commands", {})
 
     def task_names(self) -> list[str]:
-        return list(self.commands())
+        return list(self.commands()) + ([MYS_TASK] if self.mys_game() and MYS_TASK not in self.commands() else [])
 
     def schema(self) -> dict:
         tasks, opts = [], {}
@@ -793,6 +811,8 @@ class CommandGame(ReservedGame):
                                               else {v: str(c.get("defaults", {}).get(v, ""))}) for v in names},
                           "default_check": True, "placeholder": False})
         ok, why = available(self.g)
+        if self.mys_game() and MYS_TASK not in self.commands():
+            tasks.append(self.mys_entry())
         tasks = self.decorate(tasks)
         return {"tasks": tasks, "options": opts, "presets": [], "reserved": not ok, "message": why}
 

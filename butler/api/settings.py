@@ -302,5 +302,6 @@ def _(api, m, q, b):
 @route("POST", "/api/mys/sign")
 def _(api, m, q, b):
     from .. import mys
-    ok, text = mys.sign_all(api.cfg)
-    return {"ok": ok, "text": text, "accounts": mys.accounts(api.cfg)}
+    res = [mys.sign_all(api.cfg, gid) for gid in mys.GAMES]  # 「现在签到」：三个游戏都签（没有角色的不算失败）
+    ok = all(o or "没有" in t for o, t in res)
+    return {"ok": ok, "text": "；".join(t for _, t in res), "accounts": mys.accounts(api.cfg)}
