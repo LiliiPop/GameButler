@@ -347,28 +347,34 @@ def read(src: dict, data_dir: Path, miss) -> list[dict]:
         posts = posts_from_feed(c.feed())
     except Exception as e:
         errs.append(f"新接口：{e}")
-    if len(posts) < 8:
-        # 11-02 实测：匿名请求时新接口常常只给几条、甚至返回空列表（不报错）；再试「图文」列表和旧接口，合起来
-        for name, fn, conv in (("图文列表", c.opus, posts_from_opus), ("旧接口", c.history, posts_from_history)):
-            try:
-                have = {p["id"] for p in posts}
-                more = [p for p in conv(fn()) if p["id"] not in have]
-                if name == "图文列表":  # 图文列表只有封面：最近的帖子读一下详情，拿全帖子里的图和发布时间（11-02）
-                    for k, p in enumerate(more[:15]):
-                        try:
-                            pics, ts = detail_pics(c.opus_detail(p["id"], raw=f"bili_{c.mid}_detail" if k == 0 else ""))
-                            if pics:
-                                p["pics"] = pics
-                            if ts:
-                                p["ts"] = ts
-                        except Exception as e:
-                            miss.add("帖子详情读不到（只用了封面）", e)
-                        time.sleep(0.5)
-                posts += more
-                if more:
-                    miss.add(f"新接口没给全，用了{name}", errs[0] if errs else "匿名访问被限流", 0)
-            except Exception as e2:
-                errs.append(f"{name}：{e2}")
+    # 11-02：新接口匿名时常常只给几条；就算给够了也只到两三周前。再读「图文」列表（约 40 条、一个多月）补上，
+    # 不够再试旧接口。图文列表只有封面：还在进行 / 没写时间的帖子读一下详情，拿全帖子里的图
+    for name, fn, conv in (("图文列表", c.opus, posts_from_opus), ("旧接口", c.history, posts_from_history)):
+        if name == "旧接口" and len(posts) >= 8:
+            break
+        try:
+            have = {p["id"] for p in posts}
+            more = [p for p in conv(fn()) if p["id"] not in have]
+            if name == "图文列表":
+                now = _now()
+                ends = {p["id"]: extract_period(p["text"], now)[1] for p in more}
+                # 写了结束时间、还没结束的先读（活动本身），没写时间的（宣传图、预告）排后面；最多 30 条
+                live = [p for p in more if ends[p["id"]] and ends[p["id"]] >= now] + [p for p in more if not ends[p["id"]]]
+                for k, p in enumerate(live[:30]):
+                    try:
+                        pics, ts = detail_pics(c.opus_detail(p["id"], raw=f"bili_{c.mid}_detail" if k == 0 else ""))
+                        if pics:
+                            p["pics"] = pics
+                        if ts:
+                            p["ts"] = ts
+                    except Exception as e:
+                        miss.add("帖子详情读不到（只用了封面）", e)
+                    time.sleep(0.5)
+            posts += more
+            if more and len(have) < 8:
+                miss.add(f"新接口没给全，用了{name}", errs[0] if errs else "匿名访问被限流", 0)
+        except Exception as e2:
+            errs.append(f"{name}：{e2}")
     if not posts:
         raise BiliError("B 站对不登录的访问没给动态（返回空列表）" + (f"；{'；'.join(errs)}" if errs else "") + "。过一会儿再读")
     return to_items(posts, src, _now())

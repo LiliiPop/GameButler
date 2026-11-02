@@ -240,9 +240,9 @@ def _merge(cfg, d, todo, current, now, results, misses, want_img) -> dict:
                     note = after_note(it.get("text", "") + "\n" + (it.get("subtitle") or ""), st_)
                     if note:
                         it["start_note"] = note
-                # 11-02：一条活动的所有图都下（最多 6 张）；img_map 记「图片地址 → 文件名」，下次不重复下
+                # 11-02：一条活动的所有图都下（最多 12 张）；img_map 记「图片地址 → 文件名」，下次不重复下
                 bu = it.get("banner_url") or ""
-                urls = ([bu] + [u for u in it.pop("banner_urls", []) or [] if u and u != bu])[:6] if bu else []
+                urls = ([bu] + [u for u in it.pop("banner_urls", []) or [] if u and u != bu])[:12] if bu else []
                 it.pop("banner_urls", None)
                 omap = dict(old.get("img_map") or {})
                 if not omap and old.get("img") and old.get("banner_url") == bu:  # 以前只记了一张
