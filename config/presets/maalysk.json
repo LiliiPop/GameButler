@@ -1,0 +1,169 @@
+{
+ "id": "maalysk",
+ "order": 2,
+ "name": "MaaLYSK",
+ "game": "恋与深空",
+ "repo": "Witty36/MaaLYSK",
+ "kind": "MaaFramework 项目",
+ "match": {
+  "names": [
+   "MaaLYSK"
+  ]
+ },
+ "look": [
+  "MaaLYSK"
+ ],
+ "screen": "900×1600 竖屏，320 DPI（建议单独一个实例）",
+ "gid": "lysk",
+ "type": "maa",
+ "config": {
+  "gacha_reader": {
+   "back": 1,
+   "route": [
+    {
+     "word": "许愿",
+     "roi": [
+      600,
+      790,
+      140,
+      130
+     ]
+    }
+   ],
+   "keys": [
+    {
+     "key": "时光许愿券·限时",
+     "roi": [
+      385,
+      45,
+      80,
+      50
+     ]
+    },
+    {
+     "key": "深空许愿券",
+     "roi": [
+      465,
+      45,
+      80,
+      50
+     ]
+    },
+    {
+     "key": "钻石",
+     "roi": [
+      540,
+      45,
+      85,
+      50
+     ]
+    },
+    {
+     "key": "晶钻",
+     "roi": [
+      620,
+      45,
+      75,
+      50
+     ]
+    }
+   ]
+  },
+  "gacha_resources": [
+   {
+    "key": "时光许愿券·限时",
+    "per_pull": 1
+   },
+   {
+    "key": "深空许愿券",
+    "per_pull": 1
+   },
+   {
+    "key": "钻石",
+    "per_pull": 150
+   },
+   {
+    "key": "晶钻",
+    "per_pull": 150
+   }
+  ],
+  "name": "恋与深空",
+  "type": "maa",
+  "gui_exe": "MaaLYSK.exe",
+  "resource": "简体中文",
+  "mfa_instance": "日常任务",
+  "notice_reader": true,
+  "package": "com.papegames.lysk.cn",
+  "recovery_task": "✈️恋与深空启动",
+  "refresh": "05:00",
+  "retry_on_fail": false,
+  "restart_on_fail": true,
+  "fail_retries": 1,
+  "alert_hints": [
+   "活跃值未满100"
+  ],
+  "tested_tasks": [
+   "✈️恋与深空启动",
+   "🍰领日常体力",
+   "📬领好友体力",
+   "🛍️商城日常领取",
+   "💰月卡领取",
+   "🌌星间探测",
+   "⚡️体力瓶消耗",
+   "⚔️日常芯核狩猎",
+   "⚔️零点追踪豆佬",
+   "⚔️零点追踪哈特",
+   "🍂日常思念升级一次",
+   "💞主页面互动",
+   "📅日常收尾",
+   "🪴家园日常",
+   "📰读游戏内公告"
+  ],
+  "task_notices": {
+   "♻主页面切换账号": "会切换游戏账号：排在日常里时，后面的任务可能会跑在另一个账号上。"
+  },
+  "timeouts": {
+   "default": 6,
+   "stall_minutes": 3,
+   "retries": 1,
+   "✈️恋与深空启动": 8
+  },
+  "judge": {
+   "success": {
+    "*": [
+     {
+      "match": "活跃值达100",
+      "required": false
+     },
+     {
+      "match": "无可领取体力",
+      "result": "exhausted"
+     }
+    ],
+    "📬领好友体力": [
+     {
+      "verify": "gb_verify_好友体力"
+     }
+    ],
+    "🛍️商城日常领取": [
+     {
+      "verify": "gb_verify_商城日常"
+     }
+    ]
+   }
+  },
+  "before_startup": [
+   "📰读游戏内公告"
+  ]
+ },
+ "evidence_nodes": {
+  "📅日常收尾": [
+   "日程活跃度100@识别",
+   "日程活跃度100但没领完@识别",
+   "日程活跃度未满100@识别"
+  ]
+ },
+ "evidence_no_end": [
+  "📅日常收尾"
+ ]
+}

@@ -1,0 +1,104 @@
+{
+ "id": "bettergi",
+ "order": 5,
+ "name": "BetterGI",
+ "game": "原神",
+ "repo": "babalae/better-genshin-impact",
+ "kind": "BetterGI",
+ "match": {
+  "exe": [
+   "BetterGI.exe"
+  ]
+ },
+ "look": [
+  "BetterGI",
+  "BetterGI/BetterGI",
+  "Genshin Impact plugin"
+ ],
+ "screen": "电脑端，原神要 1920×1080 窗口",
+ "gid": "genshin",
+ "type": "bettergi",
+ "config": {
+  "name": "原神（BetterGI）",
+  "type": "bettergi",
+  "notice": "BetterGI 要求原神窗口化 1920×1080（16:9）。分辨率不对时识别不了画面，任务会失败。运行前请在游戏设置里确认。",
+  "onedragon_config": "默认配置",
+  "refresh": "04:00",
+  "timeout": 180,
+  "processes": [
+   "BetterGI.exe",
+   "YuanShen.exe",
+   "GenshinImpact.exe"
+  ],
+  "close_after": [
+   "BetterGI.exe",
+   "YuanShen.exe",
+   "GenshinImpact.exe"
+  ],
+  "close_grace_s": 90,
+  "item_timeout": 30,
+  "suspend_hotkey": "Ctrl + Shift + F9",
+  "cancel_hotkey": "Ctrl + Shift + F10",
+  "tested_tasks": [
+   "米游社签到",
+   "领取邮件",
+   "合成树脂",
+   "领取尘歌壶奖励",
+   "领取每日奖励",
+   "采集（临时）",
+   "狗粮",
+   "自动秘境",
+   "🏁 结束后操作"
+  ],
+  "task_notices": {
+   "自动首领讨伐": "会消耗原粹树脂。",
+   "自动地脉花": "会消耗原粹树脂（和自动秘境抢树脂）。",
+   "自动幽境危战": "战斗玩法，耗时不定；先在 BetterGI 里配好队伍。"
+  },
+  "script_notices": {
+   "锄地一条龙": "配置组里启用了「锄地一条龙」：按当前设置要跑约 7 小时（264 条路线），期间不能用电脑。建议只在电脑长时间空闲时（例如夜里）勾选，或在 BetterGI 里给它设路线数 / 时长上限。"
+  },
+  "task_timeouts": {
+   "狗粮": 480
+  },
+  "pc_gacha": {
+   "exe": [
+    "YuanShen.exe",
+    "GenshinImpact.exe"
+   ],
+   "window_regex": "^原神$",
+   "route": [
+    {
+     "key": 114,
+     "wait": 3.5
+    }
+   ],
+   "bar_roi": [
+    700,
+    0,
+    580,
+    70
+   ],
+   "keys": [
+    "纠缠之缘",
+    "原石"
+   ],
+   "back": 1,
+   "back_key": 27,
+   "calibrate": true
+  },
+  "gacha_resources": [
+   {
+    "key": "原石",
+    "per_pull": 160
+   },
+   {
+    "key": "纠缠之缘",
+    "per_pull": 1
+   },
+   {
+    "key": "相遇之缘"
+   }
+  ]
+ }
+}

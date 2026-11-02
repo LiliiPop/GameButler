@@ -1,0 +1,33 @@
+{
+ "id": "maajx3",
+ "order": 4,
+ "name": "MaaJX3（剑三无界）",
+ "game": "剑网三无界",
+ "repo": "",
+ "kind": "MaaFramework 项目",
+ "match": {
+  "names": [
+   "MaaJX3"
+  ]
+ },
+ "look": [
+  "MaaJX3"
+ ],
+ "screen": "电脑端",
+ "gid": "jx3",
+ "type": "maa",
+ "config": {
+  "name": "剑网三无界",
+  "type": "maa",
+  "controller": "win32",
+  "refresh": "06:30",
+  "retry_on_fail": false,
+  "win32": {
+   "window_regex": "剑网3无界|剑网三无界",
+   "class_regex": "",
+   "screencap": "FramePool",
+   "mouse": "Seize",
+   "keyboard": "Seize"
+  }
+ }
+}

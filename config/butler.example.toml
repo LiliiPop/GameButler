@@ -1,0 +1,7 @@
+# 游戏日常管家 · 这台电脑的设置（复制成 config/butler.toml 再改）
+# 游戏的设置在 data/games/<游戏>.json（界面「设置 → 工具与游戏」里改）；其他设置在 data/settings.json（界面「设置」里改）。
+# 常见脚本调好的设置（挂载时套用）在 config/presets/。
+
+[machine]
+timezone = "Asia/Shanghai"   # 电脑时区：只用来把脚本日志里的本地时间换算成北京时间
+data_dir = 'data'            # 管家数据目录；相对路径 = 管家文件夹下

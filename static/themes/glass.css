@@ -1,0 +1,29 @@
+/* 主题「毛玻璃」。
+   一个主题 = 这一组变量。层次规则（四层、五级字号、一个实心主按钮、四种状态色）在 app.css 里，所有主题共用；
+   主题只决定每一层长什么样（颜色、透明度、模糊、阴影、圆角），不决定有几层。
+   自建主题存在 data/themes/<名字>.json，只写要改的变量，其余沿用它基于的主题（见 butler/themes.py）。 */
+:root{
+  /* 底色三原色：界面里的半透明叠色都从这三个算（rgba(var(--ink-rgb), .06) 之类），换主题主要换它们 */
+  --ink-rgb:27,26,46; --paper-rgb:255,255,255; --blue-rgb:53,80,214;
+  --orange-rgb:180,83,15; --warm-rgb:255,244,236; --shade-rgb:14,13,28;   /* shade：压在图片上的暗层 */
+  --bg:#E9EAF2;
+  --ink:#1B1A2E; --mute:#4A4960; --faint:#6B6A80; --line:rgba(var(--ink-rgb),.10); --line2:rgba(var(--ink-rgb),.16);
+  --glass:rgba(var(--paper-rgb),.5); --glass-hi:rgba(var(--paper-rgb),.72); --glass-lo:rgba(var(--paper-rgb),.34);
+  --glass-blue:rgba(236,240,255,.62); --glass-warm:rgba(255,244,236,.66); --edge:rgba(var(--paper-rgb),.82);
+  --blue:#3550D6; --blue-ink:#2A3C9C; --blue-bg:rgba(var(--blue-rgb),.13);
+  --green:#0F7B67; --green-ink:#0B5E4F; --green-bg:rgba(15,123,103,.12);
+  --orange:#B4530F; --orange-ink:#8A3E0B; --orange-bg:rgba(180,83,15,.13);
+  --red:#B42318; --on-dark:#fff;
+  --surface:#fff; --ink-hover:#2c2a45; --warn-hover:#fff1e6; --decor:#9A99AE;
+  --star:#E2A400; --star-bg:#FFF4CC; --star-ink:#7A5600; --on-photo-hi:#FFE29A; --on-photo-warn:#FFC9A8;
+  --blob-violet:rgba(170,150,240,.72); --blob-peach:rgba(246,190,168,.72); --blob-sky:rgba(150,200,236,.66);
+  --shadow:0 1px 0 rgba(var(--paper-rgb),.95) inset,0 20px 44px -26px rgba(40,36,90,.42);
+  --shadow-lift:0 1px 0 rgba(var(--paper-rgb),.95) inset,0 28px 50px -26px rgba(40,36,90,.5);
+  --shadow-btn-dark:0 12px 24px -14px rgba(var(--ink-rgb),.8);
+  --shadow-modal:0 40px 80px -30px rgba(var(--ink-rgb),.55);
+  --blur:blur(24px) saturate(170%); --blur-light:blur(20px);
+  /* 标题：英文和数字用 Cambria（Mac 退到 Georgia），汉字落到宋体 */
+  --serif:Cambria,Georgia,"Songti SC","STSong","Noto Serif SC","Source Han Serif SC","SimSun",serif;
+  --sans:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Hiragino Sans GB","Noto Sans SC",system-ui,sans-serif;
+  --r-modal:24px; --r-card:22px; --r-top:20px; --r-strip:18px; --r-row:14px; --r-ctl:12px; --r-sm:10px; --r-xs:8px; --r-pill:999px;
+}

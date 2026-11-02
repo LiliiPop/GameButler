@@ -1,0 +1,172 @@
+{
+ "id": "maayuan",
+ "order": 0,
+ "name": "MaaYuan",
+ "game": "代号鸢",
+ "repo": "syoius/MaaYuan",
+ "kind": "MaaFramework 项目",
+ "match": {
+  "names": [
+   "MaaYuan"
+  ]
+ },
+ "look": [
+  "MaaYuan"
+ ],
+ "screen": "720×1280 竖屏（MuMu 平板 / 手机版均可）",
+ "gid": "yuan",
+ "type": "maa",
+ "config": {
+  "gacha_reader": {
+   "back": 1,
+   "route": [
+    {
+     "word": "招募",
+     "roi": [
+      0,
+      340,
+      220,
+      260
+     ]
+    }
+   ],
+   "keys": [
+    {
+     "key": "天机符传",
+     "roi": [
+      250,
+      50,
+      90,
+      50
+     ]
+    },
+    {
+     "key": "普通符传",
+     "roi": [
+      420,
+      50,
+      70,
+      50
+     ]
+    },
+    {
+     "key": "白金币",
+     "roi": [
+      575,
+      50,
+      120,
+      50
+     ]
+    }
+   ]
+  },
+  "gacha_resources": [
+   {
+    "key": "天机符传",
+    "per_pull": 1
+   },
+   {
+    "key": "普通符传"
+   },
+   {
+    "key": "白金币",
+    "per_pull": 200
+   }
+  ],
+  "name": "代号鸢（港服）",
+  "type": "maa",
+  "gui_exe": "MaaYuan.exe",
+  "notice_reader": true,
+  "package": "com.qookkagames.codekite.gw.hk",
+  "recovery_task": "🚀 启动游戏",
+  "refresh": "05:00",
+  "windows": {
+   "🍚 每日进膳": "16:00-23:59"
+  },
+  "retry_on_fail": false,
+  "evidence_default": [
+   "🗡 地宫助手",
+   "🍚 每日进膳"
+  ],
+  "evidence_nodes": {
+   "🗡 地宫助手": [
+    "找到指定地宫层数"
+   ]
+  },
+  "retry_on_fail_tasks": [
+   "🍚 每日进膳"
+  ],
+  "task_retries": {
+   "🍚 每日进膳": 4
+  },
+  "timeouts": {
+   "default": 6,
+   "stall_minutes": 4,
+   "retries": 2,
+   "🚀 启动游戏": 8,
+   "🗡 地宫助手": 15,
+   "📜 鸢报四连 - 日常专用": 8
+  },
+  "judge": {
+   "fail": {
+    "*": [
+     "未找到指定层数"
+    ]
+   },
+   "success": {
+    "*": [
+     {
+      "match": "行动次数已耗尽",
+      "result": "exhausted"
+     },
+     {
+      "match": "当前没有可办公务",
+      "result": "exhausted"
+     },
+     {
+      "match": "当前没有突发情报",
+      "result": "exhausted"
+     },
+     {
+      "match": "次数不足",
+      "result": "exhausted"
+     },
+     {
+      "match": "无行动次数",
+      "result": "exhausted"
+     },
+     {
+      "match": "洛阳铲不足",
+      "result": "exhausted"
+     },
+     {
+      "match": "首位密探已满级",
+      "result": "exhausted"
+     },
+     {
+      "match": "首位密探需突破",
+      "result": "exhausted"
+     },
+     {
+      "match": "行囊不足",
+      "result": "exhausted"
+     },
+     {
+      "match": "行动未开放",
+      "result": "exhausted"
+     },
+     {
+      "match": "心纸营建历险正在进行中",
+      "result": "exhausted"
+     }
+    ],
+    "🍚 每日进膳": [
+     "关闭晚饭体力获得界面",
+     {
+      "verify": "gb_verify_每日进膳"
+     }
+    ]
+   }
+  }
+ }
+}

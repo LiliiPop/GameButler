@@ -1,0 +1,14 @@
+{
+ "id": "maa",
+ "order": 8,
+ "name": "MAA（明日方舟）",
+ "game": "明日方舟",
+ "repo": "MaaAssistantArknights/MaaAssistantArknights",
+ "kind": "明日方舟 MAA（图形界面版）",
+ "match": {},
+ "look": [
+  "MAA"
+ ],
+ "screen": "",
+ "type": "maa_ark"
+}

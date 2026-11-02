@@ -1,0 +1,24 @@
+/* 主题「极简·白」（10-28 定为默认，照「日常管家 风格方案」B 极简）。
+   靠留白和细线分层：白底、黑字、一条 #E4E4E0 细线；没有卡片底色、没有模糊、没有阴影。
+   结构（细线行、下划线导航、文字按钮）在 app.css 末尾「B 极简」一段，所有主题共用；这里只给颜色和圆角。 */
+:root{
+  --ink-rgb:17,17,17; --paper-rgb:255,255,255; --blue-rgb:47,85,212;
+  --orange-rgb:168,74,12; --warm-rgb:255,247,240; --shade-rgb:17,17,17;
+  --bg:#FFFFFF;
+  --ink:#111111; --mute:#5C5C5C; --faint:#6B6B6B; --line:#E4E4E0; --line2:#CFCFC9;
+  --glass:transparent; --glass-hi:#FAFAF8; --glass-lo:#F6F6F3;
+  --glass-blue:transparent; --glass-warm:transparent; --edge:transparent;
+  --blue:#2F55D4; --blue-ink:#2443A8; --blue-bg:#EEF2FC;
+  --green:#11705E; --green-ink:#0C5A4B; --green-bg:#EAF4F1;
+  --orange:#A84A0C; --orange-ink:#8A3D0A; --orange-bg:#FBF0E8;
+  --red:#B42318; --on-dark:#FFFFFF;
+  --surface:#FFFFFF; --ink-hover:#333333; --warn-hover:#FBF0E8; --decor:#B5B5AF;
+  --star:#C98F00; --star-bg:#FFF6DA; --star-ink:#6E4F00; --on-photo-hi:#FFE29A; --on-photo-warn:#FFC9A8;
+  --blob-violet:transparent; --blob-peach:transparent; --blob-sky:transparent;
+  --shadow:none; --shadow-lift:none; --shadow-btn-dark:none;
+  --shadow-modal:0 24px 60px -28px rgba(17,17,17,.35);
+  --blur:none; --blur-light:none;
+  --serif:"Noto Sans SC","PingFang SC","Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;
+  --sans:"Noto Sans SC","PingFang SC","Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;
+  --r-modal:6px; --r-card:6px; --r-top:0; --r-strip:6px; --r-row:0; --r-ctl:6px; --r-sm:6px; --r-xs:4px; --r-pill:999px;
+}

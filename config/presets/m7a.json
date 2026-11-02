@@ -1,0 +1,139 @@
+{
+ "id": "m7a",
+ "order": 6,
+ "name": "三月七小助手",
+ "game": "崩坏：星穹铁道",
+ "repo": "moesnow/March7thAssistant",
+ "kind": "三月七",
+ "match": {
+  "exe": [
+   "March7th Assistant.exe"
+  ]
+ },
+ "look": [
+  "March7thAssistant",
+  "March7thAssistant_full",
+  "March7thAssistant_full/March7thAssistant_full"
+ ],
+ "screen": "电脑端，崩铁 1920×1080 窗口",
+ "gid": "starrail",
+ "type": "m7a",
+ "config": {
+  "name": "崩坏：星穹铁道（三月七）",
+  "type": "m7a",
+  "log_glob": "F:\\March7thAssistant_full\\March7thAssistant_full\\logs\\20*.log",
+  "refresh": "04:00",
+  "processes": [
+   "March7th Assistant.exe",
+   "March7th Launcher.exe",
+   "StarRail.exe"
+  ],
+  "notice": "三月七要求崩铁窗口化 1920×1080（或 1920×1080 全屏）。分辨率不对时三月七识别不了画面，任务会失败。运行前请在游戏设置里确认。",
+  "tested_tasks": [
+   "🚂 完整运行",
+   "📅 每日实训",
+   "⚡ 清体力"
+  ],
+  "run_order": [
+   "⚡ 清体力",
+   "📅 每日实训"
+  ],
+  "commands": {
+   "📅 每日实训": {
+    "description": "三月七「每日实训」（March7th Assistant.exe daily）。等程序退出；日志里有「每日实训未完成」记为未完成。消耗开拓力、支援角色、消灭敌人这几项要靠清体力，建议排在清体力之后。",
+    "args": [
+     "daily"
+    ],
+    "timeout": 60,
+    "exit_ok_means_done": true,
+    "wait_processes": [
+     "March7th Assistant.exe"
+    ],
+    "focus": [
+     "已完成：",
+     "完成任务",
+     "ERROR"
+    ],
+    "incomplete": [
+     "每日实训未完成"
+    ],
+    "progress": "当前分数:\\s*(\\d+)/(\\d+)"
+   },
+   "⚡ 清体力": {
+    "description": "三月七「清体力」（March7th Assistant.exe power），按三月七里的体力计划刷副本。",
+    "args": [
+     "power"
+    ],
+    "timeout": 120,
+    "exit_ok_means_done": true,
+    "wait_processes": [
+     "March7th Assistant.exe"
+    ],
+    "focus": [
+     "副本任务完成",
+     "ERROR"
+    ]
+   },
+   "🚂 完整运行": {
+    "description": "三月七完整运行（含周常：货币战争、差分宇宙等），时间较长。",
+    "args": [],
+    "timeout": 240,
+    "exit_ok_means_done": true,
+    "wait_processes": [
+     "March7th Assistant.exe"
+    ],
+    "focus": [
+     "已完成：",
+     "完成任务",
+     "ERROR"
+    ],
+    "incomplete": [
+     "每日实训未完成"
+    ],
+    "progress": "当前分数:\\s*(\\d+)/(\\d+)"
+   }
+  },
+  "pc_gacha": {
+   "exe": [
+    "StarRail.exe"
+   ],
+   "window_regex": "崩坏：星穹铁道",
+   "route": [
+    {
+     "key": 27,
+     "wait": 2.5
+    },
+    {
+     "word": "跃迁",
+     "wait": 3.5
+    }
+   ],
+   "bar_roi": [
+    700,
+    0,
+    580,
+    70
+   ],
+   "keys": [
+    "星轨专票",
+    "星琼"
+   ],
+   "back": 2,
+   "back_key": 27,
+   "calibrate": true
+  },
+  "gacha_resources": [
+   {
+    "key": "星琼",
+    "per_pull": 160
+   },
+   {
+    "key": "星轨专票",
+    "per_pull": 1
+   },
+   {
+    "key": "星轨通票"
+   }
+  ]
+ }
+}

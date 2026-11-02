@@ -1,0 +1,140 @@
+{
+ "id": "maatot",
+ "order": 1,
+ "name": "MaaTOT",
+ "game": "未定事件簿",
+ "repo": "Coxwtwo/MaaTOT",
+ "kind": "MaaFramework 项目",
+ "match": {
+  "names": [
+   "MaaTOT"
+  ]
+ },
+ "look": [
+  "MaaTOT"
+ ],
+ "screen": "1280×720（竖屏实例 720×1280 也行，游戏会自己横过来）",
+ "gid": "tot",
+ "type": "maa",
+ "config": {
+  "gacha_reader": {
+   "back": 1,
+   "route": [
+    {
+     "word": "女神之影",
+     "roi": [
+      230,
+      1190,
+      200,
+      90
+     ]
+    }
+   ],
+   "keys": [
+    {
+     "key": "未名晶石",
+     "roi": [
+      200,
+      25,
+      80,
+      45
+     ]
+    },
+    {
+     "key": "未名晶片",
+     "roi": [
+      385,
+      25,
+      110,
+      45
+     ]
+    },
+    {
+     "key": "女神之泪",
+     "roi": [
+      565,
+      25,
+      70,
+      45
+     ]
+    }
+   ]
+  },
+  "gacha_resources": [
+   {
+    "key": "女神之泪",
+    "per_pull": 1
+   },
+   {
+    "key": "未名晶片",
+    "per_pull": 180
+   },
+   {
+    "key": "未名晶石"
+   }
+  ],
+  "name": "未定事件簿（B服）",
+  "type": "maa",
+  "gui_exe": "MaaTOT.exe",
+  "resource": "B 服",
+  "mfa_instance": "日常",
+  "stop_app_after": true,
+  "package": "com.miHoYo.wd.bilibili",
+  "recovery_task": "启动游戏",
+  "refresh": "04:00",
+  "retry_on_fail": false,
+  "tested_tasks": [
+   "启动游戏",
+   "领取邮件",
+   "领取友谊徽章",
+   "基地一条龙",
+   "好感度",
+   "逸梦",
+   "专属甜心",
+   "你我之间",
+   "进修副本",
+   "异常副本",
+   "外勤委托",
+   "领取任务奖励",
+   "领取绮思奖励",
+   "退出游戏",
+   "资源申请"
+  ],
+  "always_last": [
+   "退出游戏"
+  ],
+  "disabled_tasks": {
+   "专属甜心": "小游戏没有防卡死，10-15 实机需要人工介入",
+   "你我之间": "习惯打卡没有「工作」项会失败，等补截图后由管家覆盖资源接管"
+  },
+  "timeouts": {
+   "default": 6,
+   "stall_minutes": 3,
+   "retries": 1,
+   "启动游戏": 10,
+   "外勤委托": 8,
+   "专属甜心": 5
+  },
+  "judge": {
+   "fail": {
+    "*": [
+     "停止任务",
+     "任务出错，已停止",
+     "请阅读用户协议并手动接受用户协议"
+    ]
+   },
+   "success": {
+    "*": [
+     {
+      "match": "关卡剩余次数不足",
+      "result": "exhausted"
+     },
+     {
+      "match": "该副本今日未开启",
+      "result": "exhausted"
+     }
+    ]
+   }
+  }
+ }
+}

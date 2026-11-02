@@ -1,0 +1,11 @@
+# 用户自己的数据和这台电脑的配置：不进仓库
+data/
+_backup/
+config/butler.toml
+config/butler.toml.*
+# 自带 Python（Python 3.12 嵌入版 + maafw 5.14.3 + tzdata），体积大，单独放进发布包
+runtime/
+# 编译出来的启动器（源码在 launcher/src，用 launcher/build.sh 编译）
+/GameButler.exe
+__pycache__/
+*.pyc

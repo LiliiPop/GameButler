@@ -1,0 +1,18 @@
+{
+ "id": "m9a",
+ "order": 7,
+ "name": "M9A",
+ "game": "重返未来：1999",
+ "repo": "MaaXYZ/M9A",
+ "kind": "MaaFramework 项目",
+ "match": {
+  "names": [
+   "M9A"
+  ]
+ },
+ "look": [
+  "M9A"
+ ],
+ "screen": "",
+ "type": "maa"
+}

@@ -1,0 +1,14 @@
+{
+ "id": "maacli",
+ "order": 9,
+ "name": "maa-cli",
+ "game": "明日方舟",
+ "repo": "MaaAssistantArknights/maa-cli",
+ "kind": "明日方舟 MAA（命令行版，可以逐项控制）",
+ "match": {},
+ "look": [
+  "maa-cli"
+ ],
+ "screen": "",
+ "type": "maa_ark"
+}

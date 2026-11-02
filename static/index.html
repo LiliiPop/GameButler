@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>日常管家</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3E%3Crect x='1' y='1' width='28' height='28' rx='9' fill='%231B1A2E'/%3E%3Cpath d='M9 15.5l4 4 8-9' stroke='%23fff' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/themes/minimal.css" id="theme-css">
+<style id="theme-vars"></style>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div class="blobs" aria-hidden="true"><i></i><i></i><i></i></div>
+<div class="wrap">
+  <header class="top glass" id="top"></header>
+  <div id="bars"></div>
+  <main id="app"><div class="skeleton">正在连接管家…</div></main>
+</div>
+<div id="modal"></div>
+<div id="toast" aria-live="polite"></div>
+<!-- 界面脚本按页面分文件（评测 #7），共用全局，顺序不能乱：core 最先，main 最后 -->
+<script src="/static/js/core.js" onerror="document.getElementById('app').innerHTML='<div style=&quot;padding:40px;font:15px/1.8 sans-serif;color:#8A3E0B&quot;><b>界面文件没有加载出来。</b><br>正在运行的管家是旧版本，不认识新界面的文件。<br>请在右下角托盘菜单里「退出管家」，再重新打开 GameButler.exe。</div>'"></script>
+<script src="/static/js/home.js"></script>
+<script src="/static/js/game.js"></script>
+<script src="/static/js/news.js"></script>
+<script src="/static/js/res.js"></script>
+<script src="/static/js/schedule.js"></script>
+<script src="/static/js/settings.js"></script>
+<script src="/static/js/run.js"></script>
+<script src="/static/js/notes.js"></script>
+<script src="/static/js/main.js" onerror="document.getElementById('app').innerHTML='<div style=&quot;padding:40px;font:15px/1.8 sans-serif;color:#8A3E0B&quot;><b>界面文件没有加载出来。</b><br>正在运行的管家是旧版本，不认识新界面的文件。<br>请在右下角托盘菜单里「退出管家」，再重新打开 GameButler.exe。</div>'"></script>
+</body>
+</html>
