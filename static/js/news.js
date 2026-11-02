@@ -77,12 +77,21 @@ function newsBanners(d, focus = null) {
   for (let k = 0; out.length < 16 && queues.some(q => q.length > k); k++) queues.forEach(q => { if (q[k] && out.length < 16) out.push(q[k]); });
   return out;
 }
+// 一个活动的图（11-02：同一个活动有多张图时都下了；按住左右拖动看这个活动的其他图）
+const bannerImgs = it => (it.imgs?.length ? it.imgs : [it.img]).filter(Boolean);
+function bannerImgAt(it) {
+  const imgs = bannerImgs(it); const N = S.newsUi || {};
+  const k = N.imgIdx?.[it.id] ?? Math.max(0, imgs.indexOf(it.img));
+  return [imgs[(k % imgs.length + imgs.length) % imgs.length], (k % imgs.length + imgs.length) % imgs.length, imgs.length];
+}
 function bannerHtml(list, i, home = false) {
   const it = list[i];
   const c = newsColor(it.game);
-  return `<section class="banner glass${home ? ' home' : ''}" data-act="${home ? 'news-home' : 'news-open'}" data-id="${esc(it.id)}" tabindex="0" aria-label="${esc(tn(it.title))}${home ? '（点开去活动页）' : ''}">
-    <div class="bblur" style="background-image:url('/news-img/${encodeURIComponent(it.img)}')"></div>
-    <img class="bimg" src="/news-img/${encodeURIComponent(it.img)}" alt="" onload="bannerFit(this)">
+  const [img, k, n] = bannerImgAt(it);
+  return `<section class="banner glass${home ? ' home' : ''}" data-act="${home ? 'news-home' : 'news-open'}" data-id="${esc(it.id)}" tabindex="0" aria-label="${esc(tn(it.title))}${home ? '（点开去活动页）' : ''}"${n > 1 ? ' title="按住左右拖动，看这个活动的其他图"' : ''}>
+    <div class="bblur" style="background-image:url('/news-img/${encodeURIComponent(img)}')"></div>
+    <img class="bimg" src="/news-img/${encodeURIComponent(img)}" alt="" onload="bannerFit(this)" draggable="false">
+    ${n > 1 ? `<div class="bcount num" aria-label="第 ${k + 1} 张图，共 ${n} 张">${k + 1} / ${n}</div>` : ''}
     <div class="bshade"></div>
     <div class="btext">
       <span class="gtag" style="background:${c};color:${onColor(c)}">${esc(shortName(it.game))}</span>
@@ -96,6 +105,7 @@ function bannerHtml(list, i, home = false) {
 // 题图按原始大小处理：竖图用竖版排法；小图（游戏内截下来的缩略图，例如时绘只有 342×142）最多放大 1.6 倍，不硬拉满变糊
 function bannerFit(img) {
   const b = img.closest('.banner'); if (!b) return;
+  b.classList.remove('tall', 'portrait', 'small'); img.style.maxWidth = img.style.maxHeight = '';
   // 竖版长图（官方号的活动说明长图，高是宽的 3 倍以上）：只露最上面的标题部分；卡面这类竖图（1.4–1.8 倍）照竖图排（11-02）
   if (img.naturalHeight > img.naturalWidth * 2.2) b.classList.add('tall');
   else if (img.naturalHeight > img.naturalWidth) b.classList.add('portrait');
@@ -105,10 +115,14 @@ function bannerFit(img) {
   }
 }
 // 换一张（10-31 加动效）：旧的那张向一边滑出、淡掉，新的从另一边滑进来；dir = 1 往后，-1 往前
-function setSlide(k, dir) {
+function setSlide(k, dir, auto = false) {
   const N = S.newsUi; if (!N?.banners?.length) return;
   const n = N.banners.length, was = N.slide;
   N.slide = (k + n) % n;
+  if (auto) {  // 自动播放换到有好几张图的活动：随机一张
+    const it = N.banners[N.slide]; const m = bannerImgs(it).length;
+    if (m > 1) (N.imgIdx = N.imgIdx || {})[it.id] = Math.floor(Math.random() * m);
+  }
   if (dir === undefined) dir = k > was ? 1 : -1;
   S.bannerElapsed = 0;
   const box = $('.banner'); if (!box) return;
@@ -124,6 +138,35 @@ function setSlide(k, dir) {
   nb.querySelectorAll(':scope > .bimg, :scope > .btext').forEach(x => x.animate([{ opacity: 0, translate: `${dir * 48}px 0` }, { opacity: 1, translate: '0 0' }], { duration: 480, easing: ease }));
   nb.querySelectorAll(':scope > .bblur').forEach(x => x.animate([{ opacity: 0 }, { opacity: .85 }], { duration: 480 }));
 }
+// 同一个活动换图（拖动）：只换图，标题、点点不变
+function setBannerImg(delta) {
+  const N = S.newsUi; const it = N?.banners?.[N.slide]; if (!it) return;
+  const [, k, n] = bannerImgAt(it); if (n < 2) return;
+  (N.imgIdx = N.imgIdx || {})[it.id] = (k + delta + n) % n;
+  const [img, k2] = bannerImgAt(it);
+  const box = $('.banner'); if (!box) return;
+  const im = box.querySelector('.bimg'), bl = box.querySelector('.bblur'), ct = box.querySelector('.bcount');
+  im.src = `/news-img/${encodeURIComponent(img)}`;
+  if (bl) bl.style.backgroundImage = `url('/news-img/${encodeURIComponent(img)}')`;
+  if (ct) ct.textContent = `${k2 + 1} / ${n}`;
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) im.animate([{ opacity: 0, translate: `${delta * 36}px 0` }, { opacity: 1, translate: '0 0' }], { duration: 360, easing: 'cubic-bezier(.2,.7,.3,1)' });
+  S.bannerElapsed = 0;
+}
+// 按住左右拖动：拖过 40 像素换一张图；拖过的这一下不算点击（不打开详情）
+(() => {
+  let x0 = null, moved = false;
+  document.addEventListener('pointerdown', e => {
+    const b = e.target.closest('.banner'); if (!b || e.button !== 0 || e.target.closest('.bnav,.bdots')) return;
+    x0 = e.clientX; moved = false;
+  });
+  document.addEventListener('pointermove', e => {
+    if (x0 === null) return;
+    const dx = e.clientX - x0;
+    if (Math.abs(dx) > 40) { setBannerImg(dx < 0 ? 1 : -1); x0 = e.clientX; moved = true; }
+  });
+  document.addEventListener('pointerup', () => { x0 = null; });
+  document.addEventListener('click', e => { if (moved && e.target.closest('.banner')) { e.preventDefault(); e.stopPropagation(); moved = false; } }, true);
+})();
 // 自动播放：每张停 5 秒，鼠标放在轮播上 / 窗口在后台时暂停计时；当前那个点里有一条进度
 function startBannerTimer() {
   clearInterval(S.bannerTimer);
@@ -133,7 +176,7 @@ function startBannerTimer() {
     if (document.hidden || $('.banner:hover') || (S.newsUi?.banners?.length || 0) < 2) return;
     S.bannerElapsed += 100;
     $('.bdots button.on')?.style.setProperty('--p', Math.min(1, S.bannerElapsed / 5000));
-    if (S.bannerElapsed >= 5000) setSlide(S.newsUi.slide + 1, 1);
+    if (S.bannerElapsed >= 5000) setSlide(S.newsUi.slide + 1, 1, true);
   }, 100);
 }
 

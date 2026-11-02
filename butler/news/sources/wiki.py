@@ -96,10 +96,12 @@ def _fb_index(src: dict, data_dir: Path, miss) -> list[dict]:
         # 去掉页面上的小按钮（编 / 刷 / 历）、面包屑（FB搬运 FB-日期）和单独一行的「公告」
         text = "\n".join(x.strip() for x in text.split("\n") if x.strip()
                          and not re.fullmatch(r"(刷|历|编|阅读|编辑|公告|.*FB搬运.*FB-.*)", x.strip()))
-        banner = _landscape(_imgs(seg))
+        imgs = _imgs(seg)
+        banner = _landscape(imgs)
         url = BASE + site + "/" + urllib.parse.quote(title)
+        alls = [u for u, w, _ in imgs if not (w and w < 300)]
         base = {"game": src["game"], "source": src["id"], "url": url, "content": "", "img_rank": float(src.get("img_rank", 3.2)),
-                "source_title": f"B 站 wiki · {title}"}
+                "source_title": f"B 站 wiki · {title}", "banner_urls": [banner] + [u for u in alls if u != banner] if banner else []}
         uid = re.sub(r"\D", "", title)[:12] + (re.search(r"补充(\d)", title).group(1) if "补充" in title else "")
         acts = extract_activities(text)
         if len(acts) > 1:  # 一帖写了好几个活动才拆（只有一个时，名字按整帖认更准）

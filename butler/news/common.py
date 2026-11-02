@@ -384,3 +384,58 @@ def _article_body(body: str) -> str:
 def _norm(t: str) -> str:
     t = re.sub(r"[\s「」『』《》【】\[\]（）()·:：!！?？,，。.丨|｜]", "", t or "")
     return re.sub(r"(现已|正式)?(开启|开放|上线)$", "", t)
+
+
+def img_size(path) -> tuple[int, int]:
+    """图片宽高（只读文件头：PNG / JPEG / GIF / WEBP），读不出返回 (0, 0)。"""
+    import struct
+    try:
+        with open(path, "rb") as f:
+            b = f.read(256 * 1024)
+    except OSError:
+        return 0, 0
+    try:
+        if b[:8] == b"\x89PNG\r\n\x1a\n":
+            return struct.unpack(">II", b[16:24])
+        if b[:6] in (b"GIF87a", b"GIF89a"):
+            return struct.unpack("<HH", b[6:10])
+        if b[:4] == b"RIFF" and b[8:12] == b"WEBP":
+            if b[12:16] == b"VP8X":
+                return 1 + int.from_bytes(b[24:27], "little"), 1 + int.from_bytes(b[27:30], "little")
+            if b[12:16] == b"VP8 ":
+                w, h = struct.unpack("<HH", b[26:30])
+                return w & 0x3FFF, h & 0x3FFF
+            if b[12:16] == b"VP8L":
+                v = int.from_bytes(b[21:25], "little")
+                return (v & 0x3FFF) + 1, ((v >> 14) & 0x3FFF) + 1
+        if b[:2] == b"\xff\xd8":
+            i = 2
+            while i < len(b) - 9:
+                if b[i] != 0xFF:
+                    i += 1
+                    continue
+                m = b[i + 1]
+                if m in (0xC0, 0xC1, 0xC2, 0xC3):
+                    h, w = struct.unpack(">HH", b[i + 5:i + 9])
+                    return w, h
+                i += 2 + struct.unpack(">H", b[i + 2:i + 4])[0]
+    except Exception:
+        pass
+    return 0, 0
+
+
+BANNER_ASPECT = 2.7  # 活动页轮播的宽高比（约 1200×440）：合并时挑和它最接近的图当题图
+
+
+def pick_banner(names: list[str], img_dir) -> str:
+    """几张题图里挑和轮播尺寸最接近的（宽高比差得最少；600 宽以下的游戏内小截图往后排）。"""
+    import math
+    best, score = "", 9e9
+    for n in names:
+        w, h = img_size(Path(img_dir) / n)
+        if not w or not h:
+            continue
+        s = abs(math.log((w / h) / BANNER_ASPECT)) + (0.6 if w < 600 else 0)
+        if s < score:
+            best, score = n, s
+    return best or (names[0] if names else "")

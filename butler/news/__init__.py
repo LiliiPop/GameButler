@@ -24,7 +24,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from ..timeutil import BJ
-from .common import KEEP_DAYS, Misses, _cache_img, _fmt, _norm, _now, _parse_dt, after_note
+from .common import KEEP_DAYS, Misses, _cache_img, pick_banner, _fmt, _norm, _now, _parse_dt, after_note
 from .sources import DEFAULT_SOURCES, READERS
 
 
@@ -106,7 +106,7 @@ def forget(cfg: dict, gid: str):
     if gone:
         keep = {k: v for k, v in items.items() if v["game"] != gid}
         _save(d / "items.json", keep)
-        used = {it.get("img") for it in keep.values()}
+        used = {it.get("img") for it in keep.values()} | {n for it in keep.values() for n in (it.get("imgs") or [])}
         for it in gone:
             jsonio.remove(d / "content" / f"{hashlib.sha1(it['id'].encode()).hexdigest()[:16]}.html")
             if it.get("img") and it["img"] not in used:
@@ -240,18 +240,25 @@ def _merge(cfg, d, todo, current, now, results, misses, want_img) -> dict:
                     note = after_note(it.get("text", "") + "\n" + (it.get("subtitle") or ""), st_)
                     if note:
                         it["start_note"] = note
-                img = old.get("img") if old.get("banner_url") == it.get("banner_url") else ""
-                if img and not (d / "img" / img).exists():  # 记着文件名、图却不在了（被误删）：重新下载
-                    img = ""
-                if not img and it.get("banner_url") and (not it.get("end") or it["end"] >= _fmt(now - timedelta(days=1))):
-                    want_img.append((it["id"], it["banner_url"], src["id"]))  # 题图最后一起并行下载
+                # 11-02：一条活动的所有图都下（最多 6 张）；img_map 记「图片地址 → 文件名」，下次不重复下
+                bu = it.get("banner_url") or ""
+                urls = ([bu] + [u for u in it.pop("banner_urls", []) or [] if u and u != bu])[:6] if bu else []
+                it.pop("banner_urls", None)
+                omap = dict(old.get("img_map") or {})
+                if not omap and old.get("img") and old.get("banner_url") == bu:  # 以前只记了一张
+                    omap[bu] = old["img"]
+                imap = {u: omap[u] for u in urls if omap.get(u) and (d / "img" / omap[u]).exists()}  # 图不在了（被误删）：重新下载
+                if not it.get("end") or it["end"] >= _fmt(now - timedelta(days=1)):
+                    want_img += [(it["id"], u, src["id"]) for u in urls if u not in imap]  # 题图最后一起并行下载
+                img = imap.get(bu, "")
                 content = it.pop("content", "")
                 if content:
                     (d / "content").mkdir(exist_ok=True)
                     (d / "content" / f"{hashlib.sha1(it['id'].encode()).hexdigest()[:16]}.html").write_text(
                         content, encoding="utf-8")
                 it.setdefault("img_rank", 1 if src["type"] == "ingame" else 3)  # 题图优先：官网 3 > 活动中心 2 > 游戏内公告 1（11-02）
-                items[it["id"]] = {**it, "img": img, "detail": bool(content),
+                items[it["id"]] = {**it, "img": img, "img_map": imap, "_urls": urls,
+                                   "imgs": [imap[u] for u in urls if u in imap], "detail": bool(content),
                                    "seen": old.get("seen") or (baseline if first else _fmt(now))}
             st.update(ok=True, count=len(got))
             ids = {it["id"] for it in got}
@@ -271,12 +278,15 @@ def _merge(cfg, d, todo, current, now, results, misses, want_img) -> dict:
             except Exception as e:
                 return "", e
         with ThreadPoolExecutor(6) as ex:
-            got_img = list(ex.map(one, want_img[:60]))
-        for (iid, _, sid), (name, err) in zip(want_img, got_img):
+            got_img = list(ex.map(one, want_img[:150]))
+        for (iid, url, sid), (name, err) in zip(want_img, got_img):
             if err is not None:
                 misses[sid].add("题图下载失败", err)
             elif iid in items and name:
-                items[iid]["img"] = name
+                x = items[iid]
+                x.setdefault("img_map", {})[url] = name
+                x["imgs"] = [x["img_map"][u] for u in x.get("_urls", [url]) if u in x["img_map"]]
+                x["img"] = x["img_map"].get(x.get("banner_url"), "") or x["img"] or name
         print(f"· 题图 {sum(1 for n, _ in got_img if n)}/{len(got_img)} 张，{time.time() - t0:.0f} 秒", flush=True)
     for sid, m in misses.items():  # 「几条没读全、为什么」写进来源状态（界面上显示，旁边有「重读」）
         status[sid].update(m.summary())
@@ -294,6 +304,8 @@ def _merge(cfg, d, todo, current, now, results, misses, want_img) -> dict:
             hit = any(len(x) >= 3 and x in mt for x in names) if mt else (ni and (ne in ni or ni in ne))
             if hit and e.get("img") and rank(e) > rank(it):
                 it["img"], it["img_rank"] = e["img"], e["img_rank"]
+            if hit and e.get("img"):  # 11-02：配上的图都留着（拖动轮播能看到）
+                it["imgs"] = list(dict.fromkeys((it.get("imgs") or ([it["img"]] if it.get("img") else [])) + (e.get("imgs") or [e["img"]])))
     for k in [k for k, x in items.items() if x.get("img_only")]:
         items.pop(k)
     # 合并重复：同一游戏同名的；或起止时间完全相同、一个名字包含另一个的（官网活动文章和更新公告里各写了一次）
@@ -352,6 +364,9 @@ def _merge(cfg, d, todo, current, now, results, misses, want_img) -> dict:
                 keep["text"] = drop["text"]  # 游戏内公告写得更细：正文用它的（时间、名字仍以官方号为准）
                 keep["subtitle"] = keep.get("subtitle") or drop.get("subtitle", "")
                 keep["also_ingame"] = True
+            keep["imgs"] = list(dict.fromkeys((keep.get("imgs") or ([keep["img"]] if keep.get("img") else []))
+                                              + (drop.get("imgs") or ([drop["img"]] if drop.get("img") else []))))
+            keep["_merged"] = True  # 合并过：题图最后按尺寸挑（11-02）
             if drop.get("img") and rank(drop) > rank(keep):  # 题图按来源挑：官网的优先（11-02）
                 keep["img"], keep["img_rank"] = drop["img"], drop.get("img_rank", 3)
             keep["detail"] = keep.get("detail") or drop.get("detail")
@@ -362,13 +377,18 @@ def _merge(cfg, d, todo, current, now, results, misses, want_img) -> dict:
                 break
     for k in gone:
         items.pop(k, None)
+    # 11-02：合并成一个活动的，题图从所有图里挑和轮播尺寸最接近的；其余的图留在 imgs（拖动轮播能看）
+    for it in items.values():
+        if it.pop("_merged", False) and len(it.get("imgs") or []) > 1:
+            it["img"] = pick_banner([n for n in it["imgs"] if (d / "img" / n).exists()], d / "img") or it.get("img", "")
+        it.pop("_urls", None)
     # 清掉结束超过 45 天的
     cut = _fmt(now - timedelta(days=KEEP_DAYS))
     for k in [k for k, it in items.items() if (it.get("end") or it.get("seen", "")) < cut]:
         items.pop(k)
     _save(d / "items.json", items)
     _save(d / "sources.json", list(status.values()))
-    used = {it.get("img") for it in items.values()}
+    used = {it.get("img") for it in items.values()} | {n for it in items.values() for n in (it.get("imgs") or [])}
     for f in (d / "img").glob("*") if (d / "img").exists() else []:  # 不再用到的题图删掉
         if f.name not in used and time.time() - f.stat().st_mtime > 3600:  # 刚下的不删（11-02：两次读取同时进行时，另一次会把这次刚下的当成没用的删掉）
             try:
@@ -447,7 +467,9 @@ def load(cfg: dict, raw: bool = False) -> dict:
     on = {x["id"] for x in sources(cfg)}
     items = [it for it in _load(d / "items.json", {}).values() if it.get("source") in on]
     imgs = {f.name for f in (d / "img").glob("*")} if (d / "img").exists() else set()
-    items = [{**it, "img": ""} if it.get("img") and it["img"] not in imgs else it for it in items]  # 图不在了就先不显示（不显示裂图）
+    items = [{**it, "img": it["img"] if it.get("img") in imgs else "",
+              "imgs": [n for n in (it.get("imgs") or []) if n in imgs]} for it in items]  # 图不在了就先不显示（不显示裂图）
+    items = [{**it, "img": it["img"] or (it["imgs"][0] if it["imgs"] else "")} for it in items]
     srcs = [x for x in _load(d / "sources.json", []) if x.get("id") in on]
     if not raw:
         items += cycle_items(cfg) + version_forecast(items)

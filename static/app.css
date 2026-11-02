@@ -1341,3 +1341,7 @@ body.sorting,body.sorting *{cursor:grabbing!important;user-select:none}
 .sch-hr::after{content:"";flex:1;height:0;border-top:1px solid var(--line)}
 /* 资源一览右栏和左边第一行对齐（批注 #169） */
 .res-pane{padding-top:26px}
+
+/* 轮播：同一个活动的第几张图（11-02） */
+.banner .bcount{position:absolute;right:16px;top:14px;z-index:3;font-size:12px;padding:2px 9px;border-radius:999px;background:rgba(0,0,0,.42);color:#fff;letter-spacing:.04em;pointer-events:none}
+.banner{touch-action:pan-y;user-select:none}

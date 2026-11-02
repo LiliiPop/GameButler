@@ -278,8 +278,10 @@ def to_items(posts: list[dict], src: dict, now: datetime) -> list[dict]:
             continue
         text = re.sub(r"\r", "", p["text"])
         banner = _banner(p["pics"])
+        alls = [u + ("@1920w.jpg" if "hdslb.com" in u and "@" not in u else "") for u, _, _ in p["pics"]]
         base = {"game": src["game"], "source": src["id"], "url": p["url"], "content": "", "img_rank": rank,
-                "source_title": "B 站官方号动态", "seen_at": _fmt(ref)}
+                "source_title": "B 站官方号动态", "seen_at": _fmt(ref),
+                "banner_urls": [banner] + [u for u in alls if u != banner] if banner else []}  # 11-02：一条动态的所有图都下
         acts = extract_activities(text)
         if len(acts) > 1:  # 一条动态写了好几个活动
             for k, (name, st, en, sub, seg) in enumerate(acts):

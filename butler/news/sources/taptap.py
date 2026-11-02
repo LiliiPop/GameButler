@@ -42,6 +42,12 @@ def _when(page: str) -> datetime | None:
         return _parse_dt(s[:16].replace("T", " "))
 
 
+def _same_day(u: str, main: str) -> bool:
+    """帖子页上还有「相关帖子」的缩略图：只要和主图同一天上传的（文件名里的 _20261026161417）。"""
+    d = lambda x: (re.search(r"_(\d{8})\d{6}\.", x) or [None, ""])[1]
+    return bool(d(main)) and d(u) == d(main)
+
+
 def read(src: dict, data_dir: Path, miss) -> list[dict]:
     app = str(src["app"])
     lst = f"https://www.taptap.cn/app/{app}/topic?os=android&type=official"
@@ -67,7 +73,9 @@ def read(src: dict, data_dir: Path, miss) -> list[dict]:
         text = (desc + "\n" + (body[i:i + 3000] if i >= 0 else "")).strip()
         img = _meta(p, "og:image", "twitter:image")
         img = img if "tapimg.com" in img else ""
+        more = list(dict.fromkeys(re.findall(r'https://img\d*-tc\.tapimg\.com/moment/[^"\'\s)<>\\]+', p)))  # 帖子里的其他图（11-02）
         base = {"game": src["game"], "source": src["id"], "url": url, "content": "",
+                "banner_urls": [img] + [u for u in more if u != img and _same_day(u, img)] if img else [],
                 "img_rank": float(src.get("img_rank", 3.3)), "source_title": f"TapTap 官方号 · {title[:40]}"}
         acts = extract_activities(text)
         if len(acts) > 1:
