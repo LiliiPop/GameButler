@@ -186,6 +186,11 @@ def serve(cfg: dict, open_browser: bool = True, port: int = PORT):
             time.sleep(0.5)
     srv.daemon_threads = True
     APP["server"], APP["started"] = srv, now_bj()
+    try:
+        from . import selfupdate
+        selfupdate.cleanup_old()
+    except Exception:
+        pass
     print(f"[{now_bj()}] 管家已启动：{url}（管理员：{'是' if is_admin() else '否'}）", flush=True)
     from .housekeeping import start_daily
     start_daily(cfg["machine"]["data_dir"])

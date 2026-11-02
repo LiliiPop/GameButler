@@ -175,6 +175,15 @@ def _fingerprint(p: Path) -> list:
                   if f.is_file() and "__pycache__" not in f.parts)
 
 
+def cleanup_old():
+    """更新时被占用、改名留下的旧文件（*.old-update，例如正在被启动器加载的 dll）：后台启动时删掉。"""
+    for f in list(ROOT.glob("*.old-update")) + list(ROOT.glob("launcher/**/*.old-update")) + list(ROOT.glob("runtime/**/*.old-update")):
+        try:
+            f.unlink()
+        except OSError:
+            pass
+
+
 def _port() -> int:
     from .web import PORT
     return PORT
@@ -207,7 +216,8 @@ def apply(api) -> dict:
            if (ROOT / "runtime" / "python").is_dir() else sys.executable}
     jsonio.write(d / "apply.json", job)
     helper = d / "apply_update.py"
-    shutil.copyfile(Path(__file__).with_name("selfupdate_apply.py"), helper)
+    newer_helper = src / "butler" / "selfupdate_apply.py"  # 11-02：用新版本自带的换文件小程序（修过的问题马上生效）
+    shutil.copyfile(newer_helper if newer_helper.exists() else Path(__file__).with_name("selfupdate_apply.py"), helper)
     flags = (getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
              | getattr(subprocess, "DETACHED_PROCESS", 0))
     (Path(cfg["machine"]["data_dir"]) / "logs").mkdir(parents=True, exist_ok=True)
@@ -232,6 +242,9 @@ def tick(cfg, port: int):
     if age > 6 * 3600 or c.get("current") != current_version():  # 每 6 小时问一次 GitHub；其余时候只看下好了没、能不能换
         c = check(cfg)
     if not (S.get(cfg, "app_update")["auto"] and c.get("newer")):
+        return
+    last = jsonio.read(_dir(cfg) / "result.json", None) or {}
+    if last.get("to") == c["latest"] and not last.get("ok"):  # 这个版本自动换失败过：不再自动反复试（每次都会重启后台），等你手动点
         return
     if not _ready(cfg, c["latest"]):
         _download(cfg)
