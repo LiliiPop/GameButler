@@ -257,7 +257,7 @@ def _merge(cfg, d, todo, current, now, results, misses, want_img) -> dict:
                     (d / "content" / f"{hashlib.sha1(it['id'].encode()).hexdigest()[:16]}.html").write_text(
                         content, encoding="utf-8")
                 it.setdefault("img_rank", 1 if src["type"] == "ingame" else 3)  # 题图优先：官网 3 > 活动中心 2 > 游戏内公告 1（11-02）
-                items[it["id"]] = {**it, "img": img, "img_map": imap, "_urls": urls,
+                items[it["id"]] = {**it, "img": img, "img_map": imap, "_urls": urls, "img_groups": None,
                                    "imgs": [imap[u] for u in urls if u in imap], "detail": bool(content),
                                    "seen": old.get("seen") or (baseline if first else _fmt(now))}
             st.update(ok=True, count=len(got))
@@ -292,6 +292,9 @@ def _merge(cfg, d, todo, current, now, results, misses, want_img) -> dict:
         status[sid].update(m.summary())
     # 活动中心的整页图（只当题图）：配给同一游戏、名字互相包含的活动；比它原来的题图来源好就换上。配不上的不单独显示（11-02）
     rank = lambda it: it.get("img_rank", 3) if it.get("img") else 0
+
+    def own(x):  # 这条自己帖子里的图（img_map 只记自己的图片地址；老数据只有一张 img）
+        return list(dict.fromkeys((x.get("img_map") or {}).values())) or ([x["img"]] if x.get("img") else [])
     # 开屏海报（img_rank 4，最清楚）：海报上识别出的字里包含活动名就配上
     for e in sorted([x for x in items.values() if x.get("img_only")], key=lambda x: x.get("img_rank", 0)):
         ne = _norm(e["title"])
@@ -302,10 +305,9 @@ def _merge(cfg, d, todo, current, now, results, misses, want_img) -> dict:
             ni = _norm(it["title"])
             names = [ni] + [_norm(x) for x in re.findall(r"「([^」]+)」", it["title"])]  # 官网标题：书名号里的才是活动名
             hit = any(len(x) >= 3 and x in mt for x in names) if mt else (ni and (ne in ni or ni in ne))
-            if hit and e.get("img") and rank(e) > rank(it):
-                it["img"], it["img_rank"] = e["img"], e["img_rank"]
-            if hit and e.get("img"):  # 11-02：配上的图都留着（拖动轮播能看到）
-                it["imgs"] = list(dict.fromkeys((it.get("imgs") or ([it["img"]] if it.get("img") else [])) + (e.get("imgs") or [e["img"]])))
+            if hit and e.get("img"):  # 11-02：配上的图算另一组，最后和合并的一样按尺寸挑一张题图
+                it["img_groups"] = (it.get("img_groups") or [own(it)]) + [own(e)]
+                it["_merged"] = True
     for k in [k for k, x in items.items() if x.get("img_only")]:
         items.pop(k)
     # 合并重复：同一游戏同名的；或起止时间完全相同、一个名字包含另一个的（官网活动文章和更新公告里各写了一次）
@@ -329,6 +331,14 @@ def _merge(cfg, d, todo, current, now, results, misses, want_img) -> dict:
     from .. import newscat as NC
     _cc: dict = {}
 
+    _ct: dict = {}
+
+    def cat(x):  # 活动类型（限定 / 复刻卡池算一类）
+        if x["id"] not in _ct:
+            c = NC.classify(x, NC.CHARS.get(x["game"], []))
+            _ct[x["id"]] = "pool" if c in ("pool", "rerun") else c
+        return _ct[x["id"]]
+
     def chars(x):  # 这条说到的角色（角色名单里的 + 帖子里新出现的「名字」）
         if x["id"] not in _cc:
             _cc[x["id"]] = set(NC.chars_in(x, NC.CHARS.get(x["game"], [])))
@@ -342,8 +352,9 @@ def _merge(cfg, d, todo, current, now, results, misses, want_img) -> dict:
             if b["id"] in gone or a["game"] != b["game"]:
                 continue
             na, nb = _norm(a["title"]), _norm(b["title"])
-            same = na == nb or (a.get("start") and a.get("start") == b.get("start") and a.get("end") == b.get("end")
-                                and na and nb and (na in nb or nb in na))
+            exact = na == nb
+            same = (a.get("start") and a.get("start") == b.get("start") and a.get("end") == b.get("end")
+                    and na and nb and (na in nb or nb in na))
             # 11-02：不同渠道写法不一样（「馥夜轻漾」/「馥夜轻漾」5星思念UP许愿…），名字互相包含、结束在同一天也算同一个
             same = same or (min(len(na), len(nb)) >= 3 and (na in nb or nb in na)
                             and (a.get("end") or "")[:10] == (b.get("end") or "")[:10] and a.get("end"))
@@ -354,6 +365,8 @@ def _merge(cfg, d, todo, current, now, results, misses, want_img) -> dict:
                             and (_shared(na, nb, 4) or (len(na) >= 6 and na in _norm(b.get("text", "")))
                                  or (len(nb) >= 6 and nb in _norm(a.get("text", ""))))
                             and bool(chars(a) & chars(b)))
+            # 11-02：名字不完全一样的，还要活动类型相同（「叶瑄SSR·叠轨晨昏」是卡池、「怪谈：时融」是活动：不合并）
+            same = exact or (same and cat(a) == cat(b))
             if not same:
                 continue
             keep, drop = better(a, b)
@@ -364,9 +377,10 @@ def _merge(cfg, d, todo, current, now, results, misses, want_img) -> dict:
                 keep["text"] = drop["text"]  # 游戏内公告写得更细：正文用它的（时间、名字仍以官方号为准）
                 keep["subtitle"] = keep.get("subtitle") or drop.get("subtitle", "")
                 keep["also_ingame"] = True
-            keep["imgs"] = list(dict.fromkeys((keep.get("imgs") or ([keep["img"]] if keep.get("img") else []))
-                                              + (drop.get("imgs") or ([drop["img"]] if drop.get("img") else []))))
-            keep["_merged"] = True  # 合并过：题图最后按尺寸挑（11-02）
+            # 合并过：每条帖子的图各算一组；最后从所有图里挑一张当题图，只留它所在那条帖子的图（拖动能看）（11-02）
+            grp = lambda x: x.get("img_groups") or [own(x)]
+            keep["img_groups"] = [g_ for g_ in grp(keep) + grp(drop) if g_]
+            keep["_merged"] = True
             if drop.get("img") and rank(drop) > rank(keep):  # 题图按来源挑：官网的优先（11-02）
                 keep["img"], keep["img_rank"] = drop["img"], drop.get("img_rank", 3)
             keep["detail"] = keep.get("detail") or drop.get("detail")
@@ -378,10 +392,23 @@ def _merge(cfg, d, todo, current, now, results, misses, want_img) -> dict:
     for k in gone:
         items.pop(k, None)
     # 11-02：合并成一个活动的，题图从所有图里挑和轮播尺寸最接近的；其余的图留在 imgs（拖动轮播能看）
+    pins = NC.load_prefs(cfg["machine"]["data_dir"]).get("img_pin") or {}  # 右键「固定为该活动题图」
     for it in items.values():
-        if it.pop("_merged", False) and len(it.get("imgs") or []) > 1:
-            it["img"] = pick_banner([n for n in it["imgs"] if (d / "img" / n).exists()], d / "img") or it.get("img", "")
+        if not it.get("_merged"):
+            it["imgs"] = own(it)  # 没合并的：就是它自己帖子的图（不沿用以前合并留下的）
+            if it.get("img") not in it["imgs"]:
+                it["img"] = (it.get("img_map") or {}).get(it.get("banner_url"), "") or (it["imgs"][0] if it["imgs"] else "")
+        if it.pop("_merged", False) and it.get("img_groups"):
+            alln = [n for g_ in it["img_groups"] for n in g_ if (d / "img" / n).exists()]
+            pin = pins.get(it["id"])
+            best = pin if pin in alln else (pick_banner(alln, d / "img") if alln else "")
+            if best:
+                it["img"] = best
+                it["imgs"] = next(g_ for g_ in it["img_groups"] if best in g_)
+            else:
+                it["imgs"] = own(it)
         it.pop("_urls", None)
+        it.pop("img_groups", None)
     # 清掉结束超过 45 天的
     cut = _fmt(now - timedelta(days=KEEP_DAYS))
     for k in [k for k, it in items.items() if (it.get("end") or it.get("seen", "")) < cut]:
@@ -508,6 +535,13 @@ def _apply(p: dict, body: dict):
         toggle(p["asked"], iid, True)
     elif a == "asked":
         toggle(p["asked"], iid, True)
+    elif a == "pin_img":  # 右键「固定为该活动题图」（11-02）：value = 图片文件名；空 = 恢复自动挑的
+        v = str(body.get("value") or "").strip()
+        pins = p.setdefault("img_pin", {})
+        if v and re.fullmatch(r"[0-9a-f]{20}\.\w{3,4}", v):
+            pins[iid] = v
+        else:
+            pins.pop(iid, None)
     elif a == "set_cat":
         if cat in NC.CATS or cat in p["user_cats"]:
             p["cat_override"][iid] = cat

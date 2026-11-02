@@ -151,6 +151,17 @@ class Client:
             time.sleep(1.2)
         return out
 
+    def opus_detail(self, oid: str, raw: str = "") -> dict:
+        """一条图文的详情（11-02：图文列表只给封面，帖子里的多张图要看详情）。"""
+        if not getattr(self, "mixin", ""):
+            self.setup()
+        q = self.signed({"id": oid, "timezone_offset": -480, "features": "onlyfansVote,onlyfansAssetsV2,decorationCard,htmlNewStyle,ugcDelete,editable,opusPrivateVisible",
+                         "web_location": "333.1368", **DM})
+        d = self.get("https://api.bilibili.com/x/polymer/web-dynamic/v1/opus/detail?" + q, raw=raw)
+        if d.get("code") != 0:
+            raise BiliError(f"详情返回 {d.get('code')}：{d.get('message', '')}")
+        return d.get("data") or {}
+
     def history(self) -> list[dict]:
         """旧接口（不要签名）：返回原始卡片。"""
         d = self.get("https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/space_history?"
@@ -220,6 +231,32 @@ def posts_from_opus(items: list[dict]) -> list[dict]:
                         "pics": [(_https(u), w, h) for u, w, h in pics], "top": False,
                         "url": f"https://www.bilibili.com/opus/{oid}"})
     return out
+
+
+def detail_pics(data: dict) -> tuple[list, int]:
+    """详情里的图（帖子正文 / 顶部图集里所有 bfs 图片，按出现顺序去重）和发布时间。"""
+    pics, seen, ts = [], set(), 0
+
+    def walk(x):
+        nonlocal ts
+        if isinstance(x, dict):
+            u = x.get("url") or x.get("src") or ""
+            if isinstance(u, str) and "/bfs/" in u and re.search(r"\.(jpe?g|png|webp|gif)$", u.split("@")[0]) \
+                    and "/face/" not in u and "/garb/" not in u and "/emote/" not in u:
+                u = _https(u)
+                if u not in seen:
+                    seen.add(u)
+                    pics.append((u, x.get("width") or 0, x.get("height") or 0))
+            if not ts and str(x.get("pub_ts") or "").isdigit():
+                ts = int(x["pub_ts"])
+            for v in x.values():
+                walk(v)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v)
+    walk(data.get("item") or data)
+    pics = [p for p in pics if not (p[1] and p[1] < 200)]  # 小图标不要
+    return pics, ts
 
 
 def posts_from_history(cards: list[dict]) -> list[dict]:
@@ -316,6 +353,17 @@ def read(src: dict, data_dir: Path, miss) -> list[dict]:
             try:
                 have = {p["id"] for p in posts}
                 more = [p for p in conv(fn()) if p["id"] not in have]
+                if name == "图文列表":  # 图文列表只有封面：最近的帖子读一下详情，拿全帖子里的图和发布时间（11-02）
+                    for k, p in enumerate(more[:15]):
+                        try:
+                            pics, ts = detail_pics(c.opus_detail(p["id"], raw=f"bili_{c.mid}_detail" if k == 0 else ""))
+                            if pics:
+                                p["pics"] = pics
+                            if ts:
+                                p["ts"] = ts
+                        except Exception as e:
+                            miss.add("帖子详情读不到（只用了封面）", e)
+                        time.sleep(0.5)
                 posts += more
                 if more:
                     miss.add(f"新接口没给全，用了{name}", errs[0] if errs else "匿名访问被限流", 0)

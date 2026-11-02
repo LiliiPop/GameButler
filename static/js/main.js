@@ -87,7 +87,8 @@ document.addEventListener('click', async e => {
     case 'news-open': openNews(el.dataset.id); break;
     case 'news-home': location.hash = '#/news'; break;
     case 'set-home-order': setAppearance({ home_order: el.dataset.v }, el.dataset.v === 'news_first' ? '总览上当前活动放在上面' : '总览上日常一览放在上面'); break;
-    case 'nd': newsAct({ act: el.dataset.a, id: el.dataset.id, game: el.dataset.game, cat: el.dataset.cat }, $('#nd-body') ? el.dataset.id : null); break;
+    case 'nd': newsAct({ act: el.dataset.a, id: el.dataset.id, game: el.dataset.game, cat: el.dataset.cat, ...(el.dataset.v !== undefined ? { value: el.dataset.v } : {}) }, $('#nd-body') ? el.dataset.id : null);
+      if (el.dataset.a === 'pin_img') { const N = S.newsUi; if (N?.imgIdx) delete N.imgIdx[el.dataset.id]; toast(el.dataset.v ? '已固定为这个活动的题图' : '已恢复自动挑题图'); } break;
     case 'news-filter': openNewsFilter(); break;
     case 'edit-group': if (S.ed) editGroup(S.ed.gid, el.dataset.task); break;
     case 'tool-browse': case 'tool-scan': case 'tool-check': case 'tool-mumu': case 'tool-emu-close': toolAct(act, el); break;

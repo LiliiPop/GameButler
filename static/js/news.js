@@ -149,23 +149,30 @@ function setBannerImg(delta) {
   im.src = `/news-img/${encodeURIComponent(img)}`;
   if (bl) bl.style.backgroundImage = `url('/news-img/${encodeURIComponent(img)}')`;
   if (ct) ct.textContent = `${k2 + 1} / ${n}`;
-  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) im.animate([{ opacity: 0, translate: `${delta * 36}px 0` }, { opacity: 1, translate: '0 0' }], { duration: 360, easing: 'cubic-bezier(.2,.7,.3,1)' });
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) im.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, easing: 'ease-out' });
   S.bannerElapsed = 0;
 }
-// 按住左右拖动：拖过 40 像素换一张图；拖过的这一下不算点击（不打开详情）
+// 按住左右拖动（11-02）：只有这个活动本身有多张图时才能拖（换活动只用自动播放和左右按钮）；
+// 一次按下只换一张；松开、移出窗口、取消都算结束；拖过的这一下不算点击（不打开详情）
 (() => {
-  let x0 = null, moved = false;
+  let x0 = null, down = null, moved = false;
+  const end = () => { x0 = null; };
   document.addEventListener('pointerdown', e => {
     const b = e.target.closest('.banner'); if (!b || e.button !== 0 || e.target.closest('.bnav,.bdots')) return;
-    x0 = e.clientX; moved = false;
+    down = e.clientX; moved = false;
+    const N = S.newsUi; const it = N?.banners?.[N.slide];
+    x0 = it && bannerImgs(it).length > 1 ? e.clientX : null;  // 只有一张图：不换图，但下面照样判断是不是拖过
   });
   document.addEventListener('pointermove', e => {
+    if (down !== null && Math.abs(e.clientX - down) > 8) moved = true;
     if (x0 === null) return;
+    if (!(e.buttons & 1)) return end();  // 没按着（在窗口外松开的）：不算拖
     const dx = e.clientX - x0;
-    if (Math.abs(dx) > 40) { setBannerImg(dx < 0 ? 1 : -1); x0 = e.clientX; moved = true; }
+    if (Math.abs(dx) > 40) { setBannerImg(dx < 0 ? 1 : -1); end(); }
   });
-  document.addEventListener('pointerup', () => { x0 = null; });
-  document.addEventListener('click', e => { if (moved && e.target.closest('.banner')) { e.preventDefault(); e.stopPropagation(); moved = false; } }, true);
+  ['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, () => { end(); setTimeout(() => { down = null; }, 0); }));
+  window.addEventListener('blur', () => { end(); down = null; });
+  document.addEventListener('click', e => { if (moved && e.target.closest('.banner')) { e.preventDefault(); e.stopPropagation(); } moved = false; }, true);
 })();
 // 自动播放：每张停 5 秒，鼠标放在轮播上 / 窗口在后台时暂停计时；当前那个点里有一条进度
 function startBannerTimer() {
@@ -301,6 +308,8 @@ function newsCtx(e) {
     ${b(it.starred ? 'unfollow' : 'follow', it.starred ? '<i>★</i>取消关注' : '<i>☆</i>关注这个活动')}
     ${it.hidden ? b('unhide', '<i>◎</i>恢复显示') : b('hide', '<i>⊘</i>隐藏这个活动')}
     ${b('hide_cat', `<i>⊖</i>${esc(catHideText(it))}`, `data-game="${esc(it.game)}" data-cat="${esc(it.cat)}"`)}
+    ${el.closest('.banner') && bannerImgs(it).length > 1 ? b('pin_img', '<i>📌</i>固定为该活动题图', `data-v="${esc(bannerImgAt(it)[0])}" title="以后这个活动的题图都用现在这张"`) : ''}
+    ${it.img_pinned ? b('pin_img', '<i>↺</i>恢复自动挑题图', 'data-v=""') : ''}
     <button type="button" data-act="news-regame" data-gid="${esc(it.game)}" title="把这个游戏的所有消息来源（官方号、官网、wiki…）重新读一遍，不进游戏"><i>⟳</i>重新读取该游戏活动</button>`;
   document.body.appendChild(m);
   const r = m.getBoundingClientRect();

@@ -325,6 +325,9 @@ def decorate(items: list[dict], prefs: dict) -> list[dict]:
     out = []
     for it in items:
         it = dict(it)
+        pin = (prefs.get("img_pin") or {}).get(it["id"])
+        if pin and pin in (it.get("imgs") or []):  # 自己固定的题图（11-02）
+            it["img"], it["img_pinned"] = pin, True
         do = (prefs.get("date_override") or {}).get(it["id"])
         if do:  # 自己改过起止时间：盖过识别的
             it["start_auto"], it["end_auto"] = it.get("start"), it.get("end")

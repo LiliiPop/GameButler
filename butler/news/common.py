@@ -428,14 +428,26 @@ BANNER_ASPECT = 2.7  # 活动页轮播的宽高比（约 1200×440）：合并�
 
 
 def pick_banner(names: list[str], img_dir) -> str:
-    """几张题图里挑和轮播尺寸最接近的（宽高比差得最少；600 宽以下的游戏内小截图往后排）。"""
+    """合并成一个活动时挑题图（11-02）：
+    1. 宽高比接近轮播（2:1 ~ 3.6:1，铺满时几乎不裁）的宽图，越接近越好；
+    2. 能完整显示的竖图（卡面这类，高不超过宽的 2.2 倍），越大越好；
+    3. 其余（16:9、方图、长图），按宽高比接近程度；
+    600 宽以下的游戏内小截图排在最后。"""
     import math
-    best, score = "", 9e9
+    best, key = "", None
     for n in names:
         w, h = img_size(Path(img_dir) / n)
         if not w or not h:
             continue
-        s = abs(math.log((w / h) / BANNER_ASPECT)) + (0.6 if w < 600 else 0)
-        if s < score:
-            best, score = n, s
+        a = w / h
+        if w < 600:
+            k = (3, abs(math.log(a / BANNER_ASPECT)))
+        elif 2.0 <= a <= 3.6:
+            k = (0, abs(math.log(a / BANNER_ASPECT)))
+        elif h > w and h <= 2.2 * w:
+            k = (1, -min(w, 2000))
+        else:
+            k = (2, abs(math.log(a / BANNER_ASPECT)))
+        if key is None or k < key:
+            best, key = n, k
     return best or (names[0] if names else "")
