@@ -183,16 +183,23 @@ function todayInner() {
     const live = R?.running && R.current?.game === ed.gid && (R.current.task === k || R.current.task === t.task);
     const sk = ed.skipTasks?.has(k);
     const b = live ? `<span class="badge run"><span class="dot live" style="width:6px;height:6px"></span>运行中</span>` : sk && !DONE.has(st?.result) ? '<span class="badge off">今天跳过</span>' : st ? badge(st.result) : off ? '<span class="badge off">停用</span>' : win && !inWindow(win) ? '<span class="badge off">等时段</span>' : '<span class="badge off">未运行</span>';
-    const td = taskDef(t.task); const open = ed.open.has(i); const can = td && td.options.length && !isBgi(ed.gid);
+    const td = taskDef(t.task); const open = ed.open.has(i); const can = td && td.options.length;  // 11-03：原神（BetterGI）也能在今日任务里改选项
     return `<div class="trow${off || sk ? ' off' : ''}${live ? ' cur' : ''}${open ? ' open' : ''}"${can ? ` data-i="${i}"` : ''} data-tkey="${esc(k)}"><div class="thead"${can ? ` data-act="toggle" data-i="${i}"` : ''}><span class="tname"><b>${esc(tn(k))}</b>${ed.todayChoices?.[k] ? '<span class="chip">仅今日</span>' : ''}${st?.detail && BAD.has(st.result) ? `<span class="sum">${esc(why(st.detail))}</span>` : st?.time ? `<span class="sum num">${esc(st.time)}</span>` : ''}</span>
       <span class="tright">${win ? `<span class="chip" title="北京时间（游戏里的时间）；${esc(winLocalNote(win) || '和电脑本地时间一样')}">${ICON.clock}只在 ${esc(win.replace(/-/g, '–'))}</span>` : ''}${b}${moreBtn('跳过此次 / 再跑一次 / 标为已完成')}${can ? `<button class="btn icon xs ghost" data-act="toggle" data-i="${i}" aria-label="${open ? '收起' : '展开'}选项" aria-expanded="${open}">${ICON.chev}</button>` : '<span class="btn icon xs ghost slot-ph" aria-hidden="true"></span>'}</span></div>
       ${open ? todayBody(t, i, td) : ''}</div>`;
   }).join('');
-  return `<div class="rows" id="rows">${rows || `<div class="empty">今天没有任务：给一套任务预设加上定时，或点下面的「添加任务」</div>`}</div>
+  // 11-03：BetterGI 这类外部工具：今日任务里也能从工具同步 / 同步到工具，都只管今天（不改任务预设）
+  const tools = g?.can_import ? `<div class="tl-tools">
+      <span class="small muted">只改今天，明天恢复任务预设里的</span><span style="flex:1"></span>
+      ${g.can_open ? `<button class="btn" data-act="open-tool" data-gid="${esc(g.id)}">去 ${esc(toolName(g))} 布置</button>` : ''}
+      <button class="btn ${g.changed_outside ? 'warn' : ''}" data-act="today-import" title="今天按 ${esc(toolName(g))} 一条龙现在的设置跑：选项用它的，它没启用的今天跳过">从 ${esc(toolName(g))} 同步（仅今日）</button>
+      <button class="btn" data-act="today-export" title="把今天要跑的（含今天单独改的选项、跳过的不算）写进 ${esc(toolName(g))} 的一条龙">同步到 ${esc(toolName(g))}</button>
+    </div>` : '';
+  return `${tools}<div class="rows" id="rows">${rows || `<div class="empty">今天没有任务：给一套任务预设加上定时，或点下面的「添加任务」</div>`}</div>
     <button type="button" class="add-line" data-act="today-add" title="挑几项任务，加进今天的队列">${ICON.plus}添加任务</button>`;
 }
 
-// 今日任务里展开改选项：保存时问「覆盖任务预设」还是「仅今日」
+// 今日任务里展开改选项：保存时问「仅今日」（默认）还是「写进任务预设」
 function todayBody(t, i, td) {
   const k = keyOf(t);
   return `<div class="tbody">
@@ -208,10 +215,12 @@ async function todaySave() {
   const rs = ed.routines?.routines || {};
   const names = [...new Set((ed.items || []).map(x => x.routine).filter(Boolean))];
   const where = t => names.find(n => (rs[n]?.tasks || []).some(x => keyOf(x) === keyOf(t)));
-  const ans = await modal({ title: '保存修改', ok: '覆盖任务预设', alt: '仅今日', cancel: '取消',
+  // 11-03：今日任务里改的默认只管今天（主按钮「仅今日」），要以后都这样再选「写进任务预设」
+  const pick = await modal({ title: '保存修改', ok: '仅今日', alt: '写进任务预设', cancel: '取消',
     body: `<div>改了这些任务的选项：</div><ul style="margin:0;padding-left:18px;line-height:1.8">${changed.map(t => `<li>${esc(tn(keyOf(t)))}${where(t) ? ` <span class="muted">→ 任务预设「${esc(where(t))}」</span>` : ' <span class="muted">（不在今天用的任务预设里，只能仅今日）</span>'}</li>`).join('')}</ul>
-      <div class="small muted">覆盖任务预设：以后每天都这样跑。仅今日：只今天这样跑，明天恢复任务预设里的。</div>` });
-  if (!ans) return false;
+      <div class="small muted">仅今日：只今天这样跑，明天恢复任务预设里的。写进任务预设：以后每天都这样跑。</div>` });
+  if (!pick) return false;
+  const ans = pick?.alt ? true : 'today';  // true = 写进任务预设
   try {
     const today = {};
     if (ans === true) {
@@ -228,6 +237,26 @@ async function todaySave() {
     setDirty(false); const open = ed.open; await loadEditor(ed.gid, 'today'); S.ed.open = open; await loadState(); renderGame();
     return true;
   } catch (e) { fail(e); return false; }
+}
+// 11-03：从工具同步（仅今日）/ 同步到工具
+async function todayImport() {
+  const ed = S.ed; const g = game(ed.gid); const name = toolName(g);
+  if (!(await confirmBox(`从 ${esc(name)} 同步（仅今日）？`, `今天按 ${esc(name)} 一条龙现在的设置跑：选项用它的；它没启用的任务今天跳过。任务预设不变，明天恢复。${S.dirty ? '<br><b>页面上还没保存的修改会丢掉。</b>' : ''}`, '同步'))) return;
+  try {
+    const r = await api('POST', `/api/today/${encodeURIComponent(ed.gid)}/import-tool`);
+    toast(r.msg || '今天按工具的设置跑');
+    setDirty(false); const open = ed.open; await schema(ed.gid, true); await loadState(); await loadEditor(ed.gid, 'today'); S.ed.open = open; renderGame();
+  } catch (e) { fail(e); }
+}
+async function todayExport() {
+  const ed = S.ed; const g = game(ed.gid); const name = toolName(g);
+  if (S.dirty && !(await todaySave())) return;
+  if (!(await confirmBox(`同步到 ${esc(name)}？`, `把今天要跑的任务（含今天单独改过的选项，跳过的不算）写进 ${esc(name)} 的一条龙配置（写之前备份）。${esc(name)} 开着时，等它关掉后再写。`, '写进去'))) return;
+  try {
+    const r = await api('POST', `/api/bettergi/${encodeURIComponent(ed.gid)}/sync`, { today: true });
+    toast(r.msg || `已写进 ${name}`);
+    await loadState(); renderGame();
+  } catch (e) { fail(e); }
 }
 async function todayReset(key) {
   try { await api('PUT', `/api/today/${encodeURIComponent(S.ed.gid)}/choices`, { choices: { [key]: null } }); toast('已恢复成任务预设里的'); const open = S.ed.open; setDirty(false); await loadEditor(S.ed.gid, 'today'); S.ed.open = open; renderGame(); } catch (e) { fail(e); }

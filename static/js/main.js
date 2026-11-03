@@ -12,6 +12,8 @@ document.addEventListener('click', async e => {
   switch (act) {
     case 'open': location.hash = `#/g/${el.dataset.gid}/today`; break;
     case 'today-reset': todayReset(el.dataset.key); break;
+    case 'today-import': todayImport(); break;
+    case 'today-export': todayExport(); break;
     case 'again-edit': againEdit(el.dataset.key); break;
     case 'go-back': if ((S.navStack || []).length > 1) history.back(); else location.hash = '#/'; break;  // 回到来的地方；直接打开这一页时回总览
     case 'launch-game': api('POST', `/api/launch/${encodeURIComponent(el.dataset.gid)}`).then(r => toast(r.msg)).catch(fail); break;

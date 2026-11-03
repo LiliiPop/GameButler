@@ -278,12 +278,73 @@ def _(api, m, q, b):
 
 
 # ---------------------------------------------------------------- 工具自己的设置（不支持的工具会说明原因）
-@route("POST", r"/api/bettergi/(\w+)/sync")
-def _(api, m, q, b):  # 两边不一样时选「以管家为准」
+def _today_tasks(api, gid: str) -> list[dict]:
+    """今天要跑的（11-03）：今天各条里的任务，盖上「仅今日」改过的选项，去掉今天右键跳过的。"""
+    from ..planner import _apply_day
     from ..schedule import Schedule
+    from ..timeutil import sched_day
+    sch = Schedule(api.cfg)
+    g = api.game(gid)
+    skip = set(sch.skip_tasks(sched_day(), gid))
+    tasks = _apply_day(api.cfg, gid, game_day(g), sch.game_tasks(gid))
+    return [t for t in tasks if item_key(t) not in skip and t.get("_base") not in skip]
+
+
+@route("POST", r"/api/bettergi/(\w+)/sync")
+def _(api, m, q, b):  # 两边不一样时选「以管家为准」；今日任务的「同步到 BetterGI」：写的都是今天要跑的（含仅今日的选项）
     gid = m.group(1)
     api.game(gid)
-    return api.adapter(gid).sync_plan(Schedule(api.cfg).game_tasks(gid), force=True)
+    return api.adapter(gid).sync_plan(_today_tasks(api, gid), force=True)
+
+
+@route("POST", r"/api/today/(\w+)/import-tool")
+def _(api, m, q, b):
+    """今日任务「从 BetterGI 同步（仅今日）」（11-03）：今天按工具一条龙现在的设置跑，任务预设不动。
+    - 今天的任务里、工具也启用了的：今天的选项改成「跟工具」（空选择 = 运行时沿用工具里的值）
+    - 工具没启用的：今天跳过（工具之前的事，例如胡桃签到，不动）
+    - 工具启用了、今天的任务里没有的：只说明，不自动加（要跑就「添加任务」）"""
+    from ..schedule import Schedule
+    from ..timeutil import sched_day
+    gid = m.group(1)
+    g = api.game(gid)
+    ad = api.adapter(gid)
+    if not hasattr(ad, "enabled_items"):
+        raise ValueError("这个游戏的工具不能同步（只有 BetterGI 这类自带一条龙的工具可以）")
+    tool = ad.import_items()
+    names = [t["task"] for t in tool]
+    pre = set(getattr(ad, "pre_tasks", dict)() or {})
+    rec = g.get("recovery_task", "")
+    sch, day = Schedule(api.cfg), sched_day()
+    skip = set(sch.skip_tasks(day, gid))
+    patch, now_skip, now_run, have = {}, [], [], set()
+    for t in sch.game_tasks(gid):
+        k = item_key(t)
+        have.add(t["task"])
+        if t["task"] == rec or t["task"] in pre:
+            continue
+        if t["task"] in names:
+            patch[k] = {}
+            if k in skip:
+                sch.set_skip_task(day, gid, k, False)
+                now_run.append(k)
+        elif k not in skip:
+            sch.set_skip_task(day, gid, k, True)
+            now_skip.append(k)
+    if patch:
+        sch.set_day_choices(day, gid, patch)
+    if hasattr(ad, "mark_synced"):
+        ad.mark_synced()
+    from ..bettergi import FINISH
+    missing = [n for n in names if n not in have and n not in pre and n != FINISH]
+    api.sched.wake()
+    parts = [f"{len(patch)} 项的选项今天跟 BetterGI"]
+    if now_skip:
+        parts.append(f"今天跳过（BetterGI 没启用）：{'、'.join(now_skip)}")
+    if now_run:
+        parts.append(f"不再跳过：{'、'.join(now_run)}")
+    if missing:
+        parts.append(f"BetterGI 还启用了 {'、'.join(missing)}，今天的任务里没有（要跑就点「添加任务」）")
+    return {"ok": True, "msg": "；".join(parts), "skipped": now_skip, "missing": missing}
 
 
 @route("PUT", r"/api/bettergi/(\w+)/group")
