@@ -284,6 +284,8 @@ document.addEventListener('contextmenu', e => {
     if (!keys.length) return;
     return showCtx(e, `${shortName(row.dataset.gid)} · 没做成的 ${keys.length} 项`, badTaskButtons(row.dataset.gid, keys));
   }
+  const tr = e.target.closest?.('.rtab tr[data-key]');  // 游戏页「运行记录」：今天失败的那一行（11-03）
+  if (tr) return showCtx(e, tn(tr.dataset.key), badTaskButtons(tr.dataset.gid, [tr.dataset.key]));
   const li = e.target.closest?.('.rg-list li[data-key]');  // 运行记录：单项
   if (li) return showCtx(e, tn(li.dataset.key), badTaskButtons(li.dataset.gid, [li.dataset.key]));
 });

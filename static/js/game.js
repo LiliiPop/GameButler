@@ -635,7 +635,8 @@ async function renderRuns(day) {
   </div>`;
 }
 function runCard(run, live) {
-  const ed = S.ed;
+  const ed = S.ed; const g = game(ed.gid);
+  const canMark = (ed.runsDay || g?.today) === g?.today;  // 11-03：今天的失败行可以右键标为已完成（标记只对今天有效）
   const st = live ? ['运行中', 'run'] : run.aborted ? ['熔断停止', 'bad'] : run.stopped ? ['手动停止', 'off'] : !run.finished ? ['中途结束', 'bad'] : run.ok ? ['顺利结束', 'ok'] : ['有任务没完成', 'bad', 1];
   const t0 = bjMs(run.started), t1 = bjMs(run.last_event);
   const nOk = run.tasks.filter(t => DONE.has(t.result)).length;
@@ -651,7 +652,7 @@ function runCard(run, live) {
         const id = run.id + '|' + j; const open = ed.openRuns.has(id);
         const a0 = (t.attempts || [])[0], a1 = (t.attempts || [])[(t.attempts || []).length - 1];
         const span = a0?.start ? `${hm(a0.start)}${a1?.end ? '–' + hm(a1.end) : ''}` : '';
-        return `<tr class="x" data-act="run-task" data-id="${esc(id)}"><td><b>${esc(tn(t.task))}</b></td><td>${badge(t.result === 'running' ? (live ? 'running' : 'stopped') : t.result)}</td>
+        return `<tr class="x" data-act="run-task" data-id="${esc(id)}"${canMark && RES[t.result]?.[1] === 'bad' && (g.att || []).some(a => a.task === t.task) ? ` data-gid="${esc(g.id)}" data-key="${esc(t.task)}" title="右键：立刻重跑 / 标为已完成 / 跳过任务"` : ''}><td><b>${esc(tn(t.task))}</b></td><td>${badge(t.result === 'running' ? (live ? 'running' : 'stopped') : t.result)}</td>
           <td class="num small">${esc(span)}</td><td class="num small">${t.tries > 1 ? `${t.tries} 次 · ` : ''}${esc(mins(t.minutes))}</td><td class="det">${esc(tn(t.detail || ''))}${t.shots?.length || t.evidence?.length ? ` <span class="chip">截图 ${(t.shots?.length || 0) + (t.evidence?.length || 0)}</span>` : ''}</td></tr>
           ${open ? `<tr><td colspan="5" style="background:transparent;padding:0"><div class="attempts">${t.attempts.map(a => `<div class="att">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b class="small">第 ${a.attempt || 1} 次</b>${badge(a.result === 'running' ? (live ? 'running' : 'stopped') : a.result)}<span class="small faint num">${esc(hm(a.start))}${a.end ? ' – ' + esc(hm(a.end)) : ''}${a.minutes ? ` · ${esc(mins(a.minutes))}` : ''}</span>${a.detail ? `<span class="small muted">${esc(why(a.detail))}</span>` : ''}</div>
