@@ -517,8 +517,8 @@ async function loadDrawerRes(gid) {
   box.innerHTML = `<div class="small muted dr-rh"><span>抽卡资源${d.at ? ` · ${esc(d.at.slice(5))} 读到${d.stale ? '（数据较旧）' : ''}` : ''}</span>
       <span><button class="linkbtn" data-act="res-add" data-gid="${esc(gid)}">记一笔</button> · <button class="linkbtn" data-act="res-defs" data-gid="${esc(gid)}">资源项</button></span></div>
     ${vals.length ? `<div class="res-nums">${d.pulls != null ? `<div class="res-big"><b class="num">${Math.floor(d.pulls)}</b><span>折合抽数</span></div>` : ''}
-      ${vals.map(([k, v]) => `<div><span class="num">${v.toLocaleString()}</span><span class="xsmall faint">${esc(k)}</span></div>`).join('')}
-      ${d.standard_pulls != null ? `<div><span class="num">${Math.floor(d.standard_pulls)}</span><span class="xsmall faint">常驻池</span></div>` : ''}</div>
+      ${d.standard_pulls != null ? `<div><b class="num">${Math.floor(d.standard_pulls)}</b><span>常驻池折合</span></div>` : ''}
+      ${vals.map(([k, v]) => `<div><b class="num">${v.toLocaleString()}</b><span>${esc(k)}</span></div>`).join('')}</div>
       ${resChart(d.series || [])}` : `<div class="xsmall faint">还没有读数：点「记一笔」手动填${(d.defs || []).length ? '' : '（先在「资源项」里写上这个游戏的抽卡货币和单抽价格）'}。</div>`}
     <div class="small muted dr-rh" style="margin-top:6px"><span>抽卡记录${d.gacha?.total ? ` · ${d.gacha.total} 抽${d.gacha.uid ? ' · UID ' + esc(d.gacha.uid) : ''}` : ''}</span>
       <span><button class="linkbtn" data-act="gacha-import" data-gid="${esc(gid)}">导入 JSON</button></span></div>
@@ -634,13 +634,25 @@ async function renderPresets() {
     </section>
     <div class="pk-board">${games.map((x, gi) => {
       const rs = [...x.routines].sort((a, b) => { const ka = presetSortKey(a.rules, x.game), kb = presetSortKey(b.rules, x.game); return ka[0] - kb[0] || ka[1] - kb[1]; });
-      return `<section class="pk-col" style="--gc:${tint(game(x.game) || {}, gi)}" aria-label="${esc(shortName(x.game))}">
+      return `<section class="pk-col" data-gid="${esc(x.game)}" style="--gc:${tint(game(x.game) || {}, gi)}" aria-label="${esc(shortName(x.game))}">
         <div class="pk-gh"><i class="b-bar"></i><b>${esc(shortName(x.game))}</b><span class="num faint xsmall">${rs.length} 套</span></div>
         ${rs.map(r => card(x, r)).join('')}
         <button type="button" class="pk-card pk-new" data-act="pk-new" data-gid="${esc(x.game)}">${PR_ICON.plus}<span>新建预设</span></button>
       </section>`;
     }).join('') || '<div class="b-empty">还没有挂游戏</div>'}</div>
   </div>`;
+  // 批注 #196（11-03）：重画 / 新建预设回来后不弹回最左边：接着上次的位置；刚新建过预设的那个游戏那一列一定露出来
+  const bd = $('.pk-board');
+  if (bd) {
+    bd.scrollLeft = S.pkScroll || 0;
+    const col = S.pkFocus && bd.querySelector(`.pk-col[data-gid="${CSS.escape(S.pkFocus)}"]`);
+    if (col) {
+      const l = col.getBoundingClientRect().left - bd.getBoundingClientRect().left + bd.scrollLeft, r = l + col.offsetWidth;
+      if (l < bd.scrollLeft || r > bd.scrollLeft + bd.clientWidth) bd.scrollLeft = Math.max(0, l - 24);
+    }
+    S.pkFocus = '';
+    bd.addEventListener('scroll', () => { S.pkScroll = bd.scrollLeft; }, { passive: true });
+  }
 }
 // 批注 #173（11-03）：看板在空白处（列与列之间、卡片下面）按住左右拖动，鼠标是小手
 (() => {
@@ -700,6 +712,7 @@ async function presetAct(act, el) {
       if (!v || v === true) return;
       const n = v.name; if (!n) return toast('要写个名字', true);
       if (doc[n]) return toast('这个名字已经有了', true);
+      S.pkFocus = gid;
       if (v.src) {
         await api('POST', `/api/games/${encodeURIComponent(gid)}/import-routines`, { names: [v.src], as: n });
       } else {

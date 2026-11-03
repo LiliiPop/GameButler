@@ -313,7 +313,7 @@ function renderBars() {
       <div class="rl-top"><div class="rl-l"><span class="dot live"></span>
         <b>${g ? `<a href="#/g/${esc(g.id)}/today" style="color:inherit;text-decoration:none">${esc(splitName(g.name)[0])}</a> · ` : ''}${esc(tn(c.task) || '准备中')}${c.attempt > 1 ? `（第 ${c.attempt} 次）` : ''}</b>
         <span class="rl-d">${state}${n ? `第 ${n} / ${g.total} 项` : ''}${c.since ? `${n ? ' · ' : ''}已 ${dur(nowBjMs() - since)}` : ''}</span></div>
-      <div class="rl-r">${R.stop_requested ? '' : `<button class="btn ghost" data-act="skip-cur" data-scope="task" title="停下这个任务，接着跑这个游戏后面的（今天不再自动跑它）。右键：跳过当前序列">跳过当前任务</button>${moreBtn('更多：跳过当前序列', '[data-act=\"skip-cur\"]')}`}${R.can_suspend && !R.stop_requested ? `<button class="btn ghost" data-act="suspend" data-on="${R.suspended ? '0' : '1'}" title="按 BetterGI 的暂停键，停在原地；期间不算超时">${R.suspended ? '继续' : '原地暂停'}</button>` : ''}
+      <div class="rl-r">${R.stop_requested ? '' : `<button class="btn ghost" data-act="skip-cur" data-scope="task" title="停下这个任务，接着跑这个游戏后面的（今天不再自动跑它）">跳过当前任务</button><button class="btn ghost" data-act="skip-cur" data-scope="game" title="这个游戏这次剩下的都不跑，接着下一个游戏">跳过当前序列</button>`}${R.can_suspend && !R.stop_requested ? `<button class="btn ghost" data-act="suspend" data-on="${R.suspended ? '0' : '1'}" title="按 BetterGI 的暂停键，停在原地；期间不算超时">${R.suspended ? '继续' : '原地暂停'}</button>` : ''}
         <button class="btn warn" data-act="stop" title="停下当前任务，整个队列（排着的、定时的）都先不跑" ${R.stop_requested ? 'disabled' : ''}>${R.stop_requested ? '正在中止' : '中止队列'}</button></div></div>
       ${sub ? `<div class="rl-sub">${sub}</div>` : ''}
       <div class="rl-bar" aria-hidden="true"><i style="width:${pct}%"></i></div>

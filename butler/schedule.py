@@ -272,6 +272,8 @@ class Schedule:
             if keys:
                 b.update(start={"mode": "now", **({"queue": True} if b["id"] in (d.get("requeue_q") or []) else {})},
                          tasks=list(keys), requeue=True)
+                if b["id"] in (d.get("requeue_rerun") or []):
+                    b["rerun"] = True
         allb = {b["id"]: b for b in rules + once}
         order = [i for i in d.get("order", []) if i in allb]
         order += [b["id"] for b in rules + once if b["id"] not in order]
@@ -348,7 +350,7 @@ class Schedule:
             d["skip"] = [i for i in d.get("skip", []) if i != bid] + ([bid] if on else [])
         jsonio.update(self.day_path(day), {}, fn)
 
-    def requeue(self, day: date, bid: str, keys: list[str], queue: bool = False):
+    def requeue(self, day: date, bid: str, keys: list[str], queue: bool = False, rerun: bool = False):
         """原条目回到「接下来」，只跑这几项；跑一次后恢复原样（mark_ran 时去掉）。
         「重跑失败项」「现在跑」「继续」、加一条同一套预设的，都走这里，不再另加一条（11-01）。
         queue = 按「加入队列」排（前面的轮完才开始），否则马上跑。"""
@@ -356,6 +358,8 @@ class Schedule:
             d.setdefault("requeue", {})[bid] = list(dict.fromkeys(keys))
             q = [i for i in d.get("requeue_q", []) if i != bid]
             d["requeue_q"] = q + ([bid] if queue else [])
+            rr = [i for i in d.get("requeue_rerun", []) if i != bid]  # 11-03：「再跑一次」挪过来的：今天做过的也再跑
+            d["requeue_rerun"] = rr + ([bid] if rerun else [])
             d["skip"] = [i for i in d.get("skip", []) if i != bid]
             d.get("ran_why", {}).pop(bid, None)
         jsonio.update(self.day_path(day), {}, fn)
@@ -377,6 +381,7 @@ class Schedule:
             if bid in (d.get("requeue") or {}):  # 重跑失败项的那一轮开始了：条目恢复原样
                 d["requeue"].pop(bid)
                 d["requeue_q"] = [i for i in d.get("requeue_q", []) if i != bid]
+                d["requeue_rerun"] = [i for i in d.get("requeue_rerun", []) if i != bid]
                 d.setdefault("ran_why", {}).pop(bid, None)
                 if not any(b["id"] == bid for b in d.get("once", [])):
                     return  # 定时生成的：不记「跑过」（它本来就按时段管）

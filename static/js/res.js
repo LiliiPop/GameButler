@@ -110,8 +110,10 @@ function resCardBody(g) {
       <tbody>${rows.map((x, i) => { const prev = rows[i + 1]; const dv = prev && x.pulls != null && prev.pulls != null ? x.pulls - prev.pulls : null;
         return `<tr><td>${esc(x.day.slice(5))}</td><td>${x.pulls != null ? Math.floor(x.pulls) : '—'}${dv ? `<small class="${dv > 0 ? 'up' : 'down'}">${dv > 0 ? '+' : ''}${Math.round(dv)}</small>` : ''}</td>${keys.map(k => `<td>${x.values?.[k] != null ? Number(x.values[k]).toLocaleString() : '—'}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>`;
   } else {
-    body = `<div class="res-nums">${r.pulls != null ? `<div class="res-big"><b class="num">${Math.floor(r.pulls)}</b><span>折合抽数${r.standard_pulls != null ? ` · 常驻 ${Math.floor(r.standard_pulls)}` : ''}</span></div>` : ''}
-      ${resVals(r).map(x => `<div><span class="num">${Number(x.v).toLocaleString()}</span><span class="xsmall faint">${esc(x.k)}${x.per ? ` · ${x.per === 1 ? '1 抽' : `${x.per} = 1 抽`}` : ''}${x.std ? ' · 常驻' : ''}</span></div>`).join('')}</div>`;
+    // 批注 #197（11-03）：各项排成一样的格子（数在上、名字在下，间距行距一致）；换算（多少 = 1 抽）只放在鼠标提示里
+    body = `<div class="res-nums">${r.pulls != null ? `<div class="res-big"><b class="num">${Math.floor(r.pulls)}</b><span>折合抽数</span></div>` : ''}
+      ${r.standard_pulls != null ? `<div><b class="num">${Math.floor(r.standard_pulls)}</b><span>常驻池折合</span></div>` : ''}
+      ${resVals(r).map(x => `<div${x.per ? ` title="${esc(x.per === 1 ? '1 个 = 1 抽' : `${x.per} 个 = 1 抽`)}${x.std ? '，常驻池用' : ''}"` : ''}><b class="num">${Number(x.v).toLocaleString()}</b><span>${esc(x.k)}</span></div>`).join('')}</div>`;
   }
   return `${tabs}${body}<div class="xsmall faint res-at">${r.at ? `${esc(r.at.slice(5))} 读到` : ''}${r.stale ? ' · <span class="bwarn">数据较旧</span>' : ''}</div>`;
 }

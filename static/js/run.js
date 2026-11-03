@@ -189,7 +189,7 @@ function bindDrag() {
   });
 }
 
-// 运行行「跳过当前任务」；右键它 →「跳过当前序列」（这个游戏这次剩下的都不跑）
+// 运行行「跳过当前任务」「跳过当前序列」（这个游戏这次剩下的都不跑）
 async function skipCurrent(scope) {
   const R = S.running; const c = R?.current || {}; const g = game(c.game);
   const ok = scope === 'game'
@@ -198,15 +198,7 @@ async function skipCurrent(scope) {
   if (!ok) return;
   try { await api('POST', '/api/running/skip', { scope }); toast(scope === 'game' ? '正在跳过这个序列…' : '正在跳过这个任务…'); S.fastUntil = Date.now() + 20000; pollRunning(); } catch (e) { fail(e); }
 }
-document.addEventListener('contextmenu', e => {
-  const b = e.target.closest?.('[data-act="skip-cur"]'); if (!b) return;
-  e.preventDefault(); closeCtx();
-  const m = document.createElement('div'); m.className = 'ctx glass'; m.id = 'news-ctx';
-  m.innerHTML = `<button type="button" data-act="skip-cur" data-scope="task"><i>⏭</i>跳过当前任务</button><button type="button" data-act="skip-cur" data-scope="game"><i>⏩</i>跳过当前序列</button>`;
-  document.body.appendChild(m);
-  const r = m.getBoundingClientRect();
-  m.style.left = Math.min(e.clientX, innerWidth - r.width - 8) + 'px'; m.style.top = Math.min(e.clientY, innerHeight - r.height - 8) + 'px';
-});
+// 批注 #198（11-03）：「跳过当前任务」「跳过当前序列」两个按钮都摆在运行行上，不再藏在右键 / 「⋯」里
 
 // 没做成的任务手动标成已完成（10-31）：今天不再算失败，也不再自动重跑
 async function markDone(gid, keys) {

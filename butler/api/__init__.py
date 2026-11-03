@@ -78,12 +78,53 @@ class Api:
         if same:  # 同一个游戏、同一套预设已经有一条排着还没跑：并进去，不再加一条（10-31）
             self.sched.wake()
             return {**same, "merged": True, "paused": bool(self.rs.paused())}
+        if when.get("kind") in ("now", "queue") and not body.get("hires") and not body.get("routine"):
+            # 11-03：「开始」「立即开始」「继续」不再复制一条「今天的任务」——把今天日程里本来就有这些任务的条目挪到现在（或队尾）；
+            # 只有哪条都不包含的任务才另加一条
+            moved, left = self._move_rules(day, body, p.keys)
+            if moved and not left:
+                self.sched.wake()
+                return {**moved, "merged": True, "paused": bool(self.rs.paused())}
+            if moved:
+                body = {**body, "tasks": left}
         b = Schedule(self.cfg).add_once(day, {"game": body["game"], "tasks": body.get("tasks") or [],
                                               "routine": body.get("routine") or "", "when": when,
                                               "label": body.get("label", ""), "rerun": bool(body.get("rerun")),
                                               "hires": body.get("hires", "")})
         self.sched.wake()
         return {**b, "paused": bool(self.rs.paused())}
+
+    def _move_rules(self, day: date, body: dict, want: list[str]) -> tuple[dict | None, list[str]]:
+        """把要跑的任务交给今天日程里已有的定时条目：它们回到「接下来」（立即 = 最前面，加入队列 = 队尾），只跑这几项，
+        跑完恢复原样（Schedule.requeue）。正在跑的那条里的任务不用再排。返回 (挪过的第一条, 哪条都不包含的任务)。"""
+        kind = (body.get("when") or {"kind": "now"}).get("kind")
+        sch = Schedule(self.cfg)
+        doc = sch.day(day)
+        cur = (self.rs.current() or {}).get("batch", "")
+        rerun = bool(body.get("rerun"))
+        left, hit, running = list(dict.fromkeys(want)), [], None
+        for x in doc["batches"]:
+            if x["game"] != body["game"] or x["kind"] != "rule" or not left:
+                continue
+            ks = [k for k in sch.batch_keys({**x, "tasks": [], "requeue": False}) if k in left]
+            if not ks:
+                continue
+            left = [k for k in left if k not in ks]
+            if x["id"] == cur and not rerun:
+                running = x  # 正在跑的这条本来就会跑到它们
+                continue
+            if x["id"] == cur:
+                left += ks  # 要「再跑一次」正在跑的那条里的任务：另加一条
+                continue
+            prev = list(x.get("tasks") or []) if x.get("requeue") else []
+            sch.requeue(day, x["id"], prev + [k for k in ks if k not in prev], queue=kind == "queue", rerun=rerun)
+            hit.append(x["id"])
+        if not hit:
+            return running, left
+        ids = [y["id"] for y in sch.day(day)["batches"]]
+        rest = [i for i in ids if i not in hit]
+        sch.set_order(day, hit + rest if kind == "now" else rest + hit)
+        return next(y for y in sch.day(day)["batches"] if y["id"] == hit[0]), left
 
     def _pending_same(self, day: date, body: dict) -> dict | None:
         """同一游戏、同一套预设今天已经有的条目：新加的并进它，不另加一条（11-01）。
