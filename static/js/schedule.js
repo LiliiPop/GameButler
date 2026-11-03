@@ -677,12 +677,33 @@ async function presetAct(act, el) {
       toast(`已删除「${name}」${r.removed_rules ? `（它的 ${r.removed_rules} 个定时也删了）` : ''}`); await loadState(); return renderPresets();
     }
     if (act === 'pk-new') {
-      const n = await modal({ title: `新建预设 · ${shortName(gid)}`, input: { label: '名字', placeholder: '例如：周末' }, ok: '建好去加任务' });
-      if (!n) return;
+      // 批注 #191（11-03）：从头开始（只有启动游戏），或从工具自带的预设新建（MAA 的预设 / MFA 实例 / 工具默认勾选；BetterGI 一条龙）
+      let tr = []; try { tr = (await api('GET', `/api/games/${encodeURIComponent(gid)}/tool-routines`)).routines || []; } catch (e) { tr = []; }
+      const tool = game(gid)?.kind === 'bettergi' ? 'BetterGI' : 'MAA';
+      const v = await modal({ title: `新建预设 · ${shortName(gid)}`, ok: '建好去加任务', body: `<div class="bedit">
+        ${tr.length ? `<div class="field-row"><b>从哪开始</b><div class="be-start">
+          <label class="rad"><input type="radio" name="pn-src" value="" checked> 从头开始 <span class="xsmall faint">只有启动游戏，自己加任务</span></label>
+          <label class="rad"><input type="radio" name="pn-src" value="tool"> 从 ${tool} 预设新建 <select class="sel" id="pn-tool" style="width:auto;max-width:260px">${tr.map((x, i) => `<option value="${i}">${esc(x.name)}（${x.count} 项）</option>`).join('')}</select></label>
+        </div></div>` : ''}
+        <label class="field-row"><b>名字</b><input class="inp" id="pn-name" placeholder="例如：周末" style="max-width:none"></label></div>`,
+        onMount: (m, setVal) => {
+          const nameEl = $('#pn-name', m), sel = $('#pn-tool', m); let auto = '';
+          const pickTool = () => { const r = m.querySelector('input[name="pn-src"][value="tool"]'); if (r) r.checked = true; const nm = tr[+sel.value]?.name || ''; if (!nameEl.value.trim() || nameEl.value === auto) { nameEl.value = auto = nm; } };
+          if (sel) { sel.addEventListener('change', pickTool); sel.addEventListener('focus', pickTool); }
+          m.querySelectorAll('input[name="pn-src"]').forEach(r => r.addEventListener('change', () => { if (r.value === 'tool' && r.checked) pickTool(); else if (nameEl.value === auto) { nameEl.value = auto = ''; } }));
+          setTimeout(() => nameEl.focus(), 50);
+          setVal(() => ({ name: nameEl.value.trim(), src: (m.querySelector('input[name="pn-src"]:checked') || {}).value === 'tool' ? tr[+sel.value]?.name : '' }));
+        } });
+      if (!v || v === true) return;
+      const n = v.name; if (!n) return toast('要写个名字', true);
       if (doc[n]) return toast('这个名字已经有了', true);
-      const rec = game(gid)?.recovery_task;
-      doc[n] = { tasks: rec ? [{ task: rec, choices: {} }] : [] };
-      await api('PUT', `/api/routines/${encodeURIComponent(gid)}`, { routines: doc });
+      if (v.src) {
+        await api('POST', `/api/games/${encodeURIComponent(gid)}/import-routines`, { names: [v.src], as: n });
+      } else {
+        const rec = game(gid)?.recovery_task;
+        doc[n] = { tasks: rec ? [{ task: rec, choices: {} }] : [] };
+        await api('PUT', `/api/routines/${encodeURIComponent(gid)}`, { routines: doc });
+      }
       if (S.route?.view === 'game' && S.ed?.gid === gid && location.hash === `#/g/${gid}/routine`) {  // 已经在这个游戏的任务预设页（批注 #178）
         S.ed.routineName = n; await loadState(); await loadEditor(gid, 'routine'); renderGame(); toast(`已新建「${n}」：点「修改预设」加任务`);
       } else { S.pendingRoutine = n; location.hash = `#/g/${gid}/routine`; }

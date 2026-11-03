@@ -139,9 +139,7 @@ function routineCard(g) {
   const cur = onRoutine ? ed.routineName : '';
   let top = '', acts = '';
   if (onRoutine && cur) {
-    acts = `${presets.length ? `<select class="sel" style="max-width:none" data-act="apply-src" aria-label="从 MAA 预设换一套…"><option value="" selected disabled>从 MAA 预设换一套…</option>
-        <optgroup label="MAA 自带预设">${presets.map(p => `<option value="p:${esc(p.name)}" ${p.error ? `disabled title="${esc(p.error)}"` : ''}>${esc(p.name)}${p.error ? `（不能用：${esc(p.error)}）` : ''}</option>`).join('')}</optgroup></select>` : ''}
-      <div class="rc-btns"><button class="btn xs" data-act="pk-new" data-gid="${esc(g.id)}" title="新建一套空的任务预设（只有启动游戏），再往里加任务">新建预设</button><button class="btn xs" data-act="routine-new">另存为新预设</button><button class="btn xs" data-act="routine-rename">重命名</button><button class="btn xs" data-act="routine-del">删除</button></div>`;
+    acts = `      <div class="rc-btns"><button class="btn xs" data-act="pk-new" data-gid="${esc(g.id)}" title="新建一套任务预设：从头开始，或从工具自带的预设新建">新建预设</button><button class="btn xs" data-act="routine-new">另存为新预设</button><button class="btn xs" data-act="routine-rename">重命名</button><button class="btn xs" data-act="routine-del">删除</button></div>`;
   } else if (onRoutine) {
     acts = `<div class="rc-btns"><button class="btn xs" data-act="pk-new" data-gid="${esc(g.id)}">新建预设</button></div>`;
   }

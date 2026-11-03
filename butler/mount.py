@@ -368,9 +368,10 @@ def autofix(cfg: dict, gid: str, force: bool = False) -> str:
     return ""
 
 
-def import_routines(cfg: dict, gid: str, names: list[str] | None) -> list[str]:
+def import_routines(cfg: dict, gid: str, names: list[str] | None, as_name: str = "") -> list[str]:
     """把工具自带的预设导入成任务预设（11-02：挂上以后也能导入）。names = None 导入全部。
-    和已有的同名时加「（导入）」。返回导入后的名字。"""
+    和已有的同名时加「（导入）」。as_name：只导入一套时用这个名字（11-03「新建预设 → 从 MAA 预设新建」，重名直接报错）。
+    返回导入后的名字。"""
     from . import games as G
     from .store import Store
     st = Store(cfg["machine"]["data_dir"])
@@ -381,7 +382,9 @@ def import_routines(cfg: dict, gid: str, names: list[str] | None) -> list[str]:
     for name, items in tr.items():
         if names is not None and name not in names:
             continue
-        nm, k = name, 2
+        nm, k = (as_name.strip() if as_name and names and len(names) == 1 else name), 2
+        if as_name and nm in doc["routines"]:
+            raise ValueError(f"已经有叫「{nm}」的任务预设了")
         while nm in doc["routines"]:
             nm = f"{name}（导入{'' if k == 2 else k - 1}）"
             k += 1

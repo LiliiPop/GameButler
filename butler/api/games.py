@@ -358,6 +358,6 @@ def _(api, m, q, b):
     gid = m.group(1)
     api.game(gid)
     names = b.get("names")
-    got = MT.import_routines(api.cfg, gid, [str(x) for x in names] if isinstance(names, list) else None)
+    got = MT.import_routines(api.cfg, gid, [str(x) for x in names] if isinstance(names, list) else None, str(b.get("as") or ""))
     api.sched.wake()
     return {"ok": True, "imported": got}
