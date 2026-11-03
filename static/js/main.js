@@ -148,7 +148,8 @@ document.addEventListener('input', e => {
   if (act === 'filter') { ed.filter = el.value; refreshList(); return; }
   if (act === 'key') { const v = el.value.trim(); if (v) ed.tasks[i].key = v; else delete ed.tasks[i].key; touch(false); return; }
   if (act === 'window') {
-    const v = el.value.trim(); ed.winEdits = ed.winEdits || {}; ed.winEdits[keyOf(ed.tasks[i])] = winBj(v);
+    const v = el.value.trim(); ed.winEdits = ed.winEdits || {}; ed.winEdits[keyOf(ed.tasks[i])] = v.replace(/，/g, ',');  // 批注 #194：填的就是北京时间
+    const ln = $(`[data-winlocal="${i}"]`); if (ln) ln.textContent = winLocalNote(v);
     const err = $(`[data-err="window-${i}"]`); const bad = v && !WIN_RE.test(v.replace(/，/g, ','));
     el.classList.toggle('invalid', !!bad); if (err) err.textContent = bad ? '格式：HH:MM-HH:MM，多段用逗号隔开' : ''; touch(false); return;
   }

@@ -66,7 +66,7 @@ async function pickRun(gid) {
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><button class="btn xs" data-pk="all">全选</button><button class="btn xs" data-pk="none">全不选</button><button class="btn xs" data-pk="todo">只选未完成</button>
       <label class="small" style="margin-left:auto"><input type="checkbox" id="pk-rerun" ${rerun ? 'checked' : ''}> 今天做过的也再跑一次</label></div>
     <div class="pick">${tasks.map(t => { const k = keyOf(t), off = reason(t.task), st = status[k], w = winOf(g, t); return `<button type="button" class="it${sel.has(k) ? ' on' : ''}" data-pk-key="${esc(k)}" aria-pressed="${sel.has(k)}" ${off ? 'disabled' : ''}>
-      <span class="cbx">${ICON.check.replace('currentColor', '#fff')}</span><span class="nm"><b>${esc(tn(k))}</b>${w ? `<div>只在 ${esc(winLocal(w))}</div>` : ''}</span>${off ? '<span class="badge off">停用</span>' : ''}${st ? badge(st.result) : '<span class="badge off">未运行</span>'}</button>`; }).join('')}</div>`;
+      <span class="cbx">${ICON.check.replace('currentColor', '#fff')}</span><span class="nm"><b>${esc(tn(k))}</b>${w ? `<div>只在 ${esc(w)}（北京时间）</div>` : ''}</span>${off ? '<span class="badge off">停用</span>' : ''}${st ? badge(st.result) : '<span class="badge off">未运行</span>'}</button>`; }).join('')}</div>`;
   const res = await modal({
     title: `选择要跑的任务 · ${g.name}`, wide: true, ok: '开始', body: `<div id="pk">${html()}</div>${S.running?.running ? '<div class="small" style="color:var(--blue-ink)">现在正在运行：会排进今天的队列，前面的跑完接着跑。</div>' : ''}`,
     onMount: (m, setOk) => {

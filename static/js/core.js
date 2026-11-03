@@ -159,7 +159,12 @@ function modal({ title, body = '', ok = '确定', cancel = '取消', alt = '', d
     bg.addEventListener('click', e => {
       if (e.target === bg) return done(false);
       const b = e.target.closest('[data-m]'); if (!b) return;
-      if (b.dataset.m === 'ok') { const ctl = root._okValue; done(ctl ? ctl() : okv()); }
+      if (b.dataset.m === 'ok') {
+        // 批注 #193（11-03）：定时选了「每周」却没勾哪几天：不能保存，弹窗留着
+        const bd = root.querySelector('.be-days');
+        if (bd && bd.querySelector('input[name="wd"][value="week"]')?.checked && ![...bd.querySelectorAll('[data-wd]')].some(x => x.checked)) { toast('选了「每周」，还要勾上哪几天', true); return; }
+        const ctl = root._okValue; done(ctl ? ctl() : okv());
+      }
       else if (b.dataset.m === 'alt') { const ctl = root._okValue; done({ alt: true, value: ctl ? ctl() : okv() }); }
       else done(false);
     });

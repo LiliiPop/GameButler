@@ -185,7 +185,7 @@ function todayInner() {
     const b = live ? `<span class="badge run"><span class="dot live" style="width:6px;height:6px"></span>运行中</span>` : sk && !DONE.has(st?.result) ? '<span class="badge off">今天跳过</span>' : st ? badge(st.result) : off ? '<span class="badge off">停用</span>' : win && !inWindow(win) ? '<span class="badge off">等时段</span>' : '<span class="badge off">未运行</span>';
     const td = taskDef(t.task); const open = ed.open.has(i); const can = td && td.options.length && !isBgi(ed.gid);
     return `<div class="trow${off || sk ? ' off' : ''}${live ? ' cur' : ''}${open ? ' open' : ''}"${can ? ` data-i="${i}"` : ''} data-tkey="${esc(k)}"><div class="thead"${can ? ` data-act="toggle" data-i="${i}"` : ''}><span class="tname"><b>${esc(tn(k))}</b>${ed.todayChoices?.[k] ? '<span class="chip">仅今日</span>' : ''}${st?.detail && BAD.has(st.result) ? `<span class="sum">${esc(why(st.detail))}</span>` : st?.time ? `<span class="sum num">${esc(st.time)}</span>` : ''}</span>
-      <span class="tright">${win ? `<span class="chip" title="北京时间 ${esc(win.replace(/-/g, '–'))}">${ICON.clock}只在 ${esc(winLocal(win).replace(/-/g, '–'))}</span>` : ''}${b}${moreBtn('跳过此次 / 再跑一次 / 标为已完成')}${can ? `<button class="btn icon xs ghost" data-act="toggle" data-i="${i}" aria-label="${open ? '收起' : '展开'}选项" aria-expanded="${open}">${ICON.chev}</button>` : '<span class="btn icon xs ghost slot-ph" aria-hidden="true"></span>'}</span></div>
+      <span class="tright">${win ? `<span class="chip" title="北京时间（游戏里的时间）；${esc(winLocalNote(win) || '和电脑本地时间一样')}">${ICON.clock}只在 ${esc(win.replace(/-/g, '–'))}</span>` : ''}${b}${moreBtn('跳过此次 / 再跑一次 / 标为已完成')}${can ? `<button class="btn icon xs ghost" data-act="toggle" data-i="${i}" aria-label="${open ? '收起' : '展开'}选项" aria-expanded="${open}">${ICON.chev}</button>` : '<span class="btn icon xs ghost slot-ph" aria-hidden="true"></span>'}</span></div>
       ${open ? todayBody(t, i, td) : ''}</div>`;
   }).join('');
   return `<div class="rows" id="rows">${rows || `<div class="empty">今天没有任务：给一套任务预设加上定时，或点下面的「添加任务」</div>`}</div>
@@ -288,6 +288,8 @@ const taskDef = name => S.schemas[S.ed.gid].tasks.find(x => x.name === name);
 // 任务的运行时段写在游戏设置里（按任务键或任务名），不在任务项上；编辑页改了先记在 ed.winEdits，保存时一起写回。
 // 存的是北京时间（调度按北京时间判）；界面上显示和填写都用电脑本地时间（评测 #4，和批次时间同一口径）。
 const winLocal = w => !w ? '' : w.split(/[,，]/).map(seg => seg.split('-').map(x => bjToLocal(x.trim())).join('-')).join(',');
+// 批注 #194（11-03）：运行时段按北京时间（游戏里的时间）填，下面写出换算成电脑本地时间是几点（本地就是北京时间时不写）
+const winLocalNote = w => { const x = (w || '').replace(/，/g, ','); if (!x || !WIN_RE.test(x)) return ''; const l = winLocal(x); return l.replace(/\s/g, '') === x.replace(/\s/g, '') ? '' : `本地时间 ${l}`; };
 const winBj = w => !w || !WIN_RE.test(w.replace(/，/g, ',')) ? w : w.replace(/，/g, ',').split(',').map(seg => seg.split('-').map(x => localToBj(x.trim())).join('-')).join(',');
 function winOf(g, t) {
   const k = keyOf(t); const ed = S.ed;
@@ -331,7 +333,7 @@ function taskRow(t, i) {
   if (off) right += `<span class="badge off">停用</span>`;
   right += untestedTag(td) + noticeIcon(td);
   const win = winOf(game(ed.gid), t);
-  if (win) right += `<span class="chip" title="北京时间 ${esc(win.replace(/-/g, '–'))}">${ICON.clock}只在 ${esc(winLocal(win).replace(/-/g, '–'))}</span>`;
+  if (win) right += `<span class="chip" title="北京时间（游戏里的时间）；${esc(winLocalNote(win) || '和电脑本地时间一样')}">${ICON.clock}只在 ${esc(win.replace(/-/g, '–'))}</span>`;
   if (ed.tab === 'today') {
     if (isCur) right += `<span class="badge run"><span class="dot live" style="width:6px;height:6px"></span>运行中</span>`;
     else if (st) right += badge(st.result);
@@ -364,7 +366,7 @@ function taskBody(t, i, td, off, st) {
   if (st && st.result !== 'pending') h += `<div class="st-detail num">${badge(st.result)}${st.attempts > 1 ? `<span>尝试 ${st.attempts} 次</span>` : ''}${st.detail ? `<span>${esc(why(st.detail))}</span>` : ''}<a href="#/g/${esc(ed.gid)}/runs">看运行记录</a></div>`;
   if (!bgi) h += `<div class="metaf">
     <label>显示名（同一任务加多次时用来区分）<input class="inp" data-act="key" data-i="${i}" value="${esc(t.key || '')}" placeholder="${esc(dup ? '保存时自动命名为「' + tn(t.task) + ' #2」' : tn(t.task))}"></label>
-    <label>运行时段（电脑本地时间，不填 = 不限；这个游戏所有日子都按它）<input class="inp num" data-act="window" data-i="${i}" value="${esc(WIN_RE.test(winOf(g, t)) ? winLocal(winOf(g, t)) : winOf(g, t))}" placeholder="例如 ${esc(winLocal('12:00-15:00'))}"><span class="err" data-err="window-${i}"></span></label>
+    <label>运行时段（北京时间，和游戏里一样；不填 = 不限；这个游戏所有日子都按它）<input class="inp num" data-act="window" data-i="${i}" value="${esc(winOf(g, t))}" placeholder="例如 12:00-15:00"><span class="xsmall faint" data-winlocal="${i}">${winLocalNote(winOf(g, t))}</span><span class="err" data-err="window-${i}"></span></label>
   </div>`;
   if (td) {
     if (td.options.length) h += `<div class="opts">${optionsHtml(td, t, i, td.options, 0)}</div>`;

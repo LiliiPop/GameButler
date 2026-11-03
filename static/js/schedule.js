@@ -278,14 +278,14 @@ function daysEditor(days) {
   return `<div class="be-days"><label class="rad"><input type="radio" name="wd" value="daily" ${daily ? 'checked' : ''}> 每天</label>
     <label class="rad"><input type="radio" name="wd" value="week" ${daily ? '' : 'checked'}> 每周 ${[1, 2, 3, 4, 5, 6, 7].map(n => `<label class="chk"><input type="checkbox" data-wd="${n}" ${set.has(n) ? 'checked' : ''}> ${WEEK_MON[n - 1]}</label>`).join('')}</label></div>`;
 }
-// 批注 #180（11-03）：「每天」和「每周几」不能同时选：勾了星期几自动换成「每周」；选「每天」清掉星期几；星期几全取消 = 每天
+// 批注 #180 / #193（11-03）：「每天」和「每周几」不能同时选：勾了星期几自动换成「每周」；选「每天」清掉星期几。
+// 可以先点「每周」再勾哪几天；「每周」一天都没勾时不能保存（弹窗的「确定」里拦）
 document.addEventListener('change', e => {
   const box = e.target.closest?.('.be-days'); if (!box) return;
   const daily = box.querySelector('input[name="wd"][value="daily"]'), week = box.querySelector('input[name="wd"][value="week"]');
   const days = [...box.querySelectorAll('[data-wd]')];
-  if (e.target.matches('[data-wd]')) { if (days.some(x => x.checked)) week.checked = true; else daily.checked = true; }
+  if (e.target.matches('[data-wd]')) { if (days.some(x => x.checked)) week.checked = true; }
   else if (e.target === daily && daily.checked) days.forEach(x => { x.checked = false; });
-  else if (e.target === week && week.checked && !days.some(x => x.checked)) { daily.checked = true; toast('先勾上每周哪几天'); }
 });
 function readDays(m) {
   if ((m.querySelector('input[name="wd"]:checked') || {}).value !== 'week') return 'daily';
@@ -610,11 +610,14 @@ async function renderPresets() {
   S.presetDocs = docs;
   const card = (x, r) => {
     const tasks = (docs[x.game][r.name]?.tasks || []).map(t => t.key || t.task).filter(k => k !== game(x.game)?.recovery_task);
+    const gw = game(x.game)?.windows || {};  // 批注 #195（11-03）：有运行时段的任务也要这套有定时才会进每天的日程
+    const hasWin = (docs[x.game][r.name]?.tasks || []).some(t => gw[t.key || t.task] || gw[t.task]);
     const when = r.rules.length ? r.rules.map(u => `<button type="button" class="pk-when" data-act="rule-edit" data-id="${esc(u.id)}" title="点开改定时">${esc(ruleChip(u))}</button>`).join('')
       : `<button type="button" class="pk-when none" data-act="rule-add" data-gid="${esc(x.game)}" data-name="${esc(r.name)}" title="点这里加定时">没有定时：手动跑</button>`;
     return `<article class="pk-card" data-gid="${esc(x.game)}" data-name="${esc(r.name)}">
       <div class="pk-h"><b>${esc(r.name)}</b><span class="num faint xsmall">${tasks.length} 项</span></div>
       <div class="pk-whens">${when}</div>
+      ${!r.rules.length && hasWin ? '<div class="pk-hint xsmall">里面有只在某个时段跑的任务，但这套没有定时，不会自动跑：加一个「每天」的定时（时间随意，例如加入队列），这些任务会等到自己的时段再跑</div>' : ''}
       <ol class="pk-tasks" tabindex="0" aria-label="任务（滚轮看全部）">${tasks.map(k => `<li>${esc(tn(k))}</li>`).join('') || '<li class="faint">还没有任务</li>'}</ol>
       ${tasks.length > 5 ? `<div class="pk-more xsmall faint">还有 ${tasks.length - 5} 项</div>` : ''}
       <div class="pk-acts">

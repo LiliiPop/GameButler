@@ -1374,3 +1374,5 @@ section.set > .lrow:last-child,section.set .tools > .trow:last-child,section.set
 section.set > .section-h + .push-help{padding-top:13px}
 section.set > .section-h + div.small{padding-top:13px}
 section.set > .section-h + .ev-game{padding-top:16px}
+/* 批注 #195（11-03）：没有定时、但有时段任务的预设卡片上的提醒 */
+.pk-hint{color:var(--orange-ink);line-height:1.6}
