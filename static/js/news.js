@@ -16,6 +16,39 @@ const leftText = bj => {
 };
 const gameName = gid => game(gid)?.name || gid;
 const shortName = gid => splitName(gameName(gid))[0];
+// 活动页游戏的先后（批注 #174）：拖动上面那排游戏排过的按排好的，其余按挂载顺序
+function newsOrder(gid) {
+  const o = S.news?.prefs?.game_order || []; const k = o.indexOf(gid);
+  return k >= 0 ? k : 1000 + Math.max(0, allGames().findIndex(g => g.id === gid));
+}
+// 按住拖动那排游戏排序：拖过的那一下不算点击（不切换「只看这个游戏」）
+(() => {
+  let drag = null;
+  document.addEventListener('pointerdown', e => {
+    const c = e.target.closest?.('.gchip[data-act="news-focus"]'); if (!c || e.button !== 0) return;
+    drag = { el: c, box: c.parentElement, x0: e.clientX, moved: false };
+  });
+  document.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (!drag.moved && Math.abs(e.clientX - drag.x0) < 6) return;
+    if (!drag.moved) { drag.moved = true; drag.el.classList.add('dragging'); drag.box.classList.add('sorting'); }
+    const over = [...drag.box.querySelectorAll('.gchip')].find(x => x !== drag.el && (() => { const r = x.getBoundingClientRect(); return e.clientX > r.left && e.clientX < r.right; })());
+    if (over) { const r = over.getBoundingClientRect(); drag.box.insertBefore(drag.el, e.clientX < r.left + r.width / 2 ? over : over.nextSibling); }
+  });
+  const end = () => {
+    if (!drag) return;
+    const d = drag; drag = null;
+    if (!d.moved) return;
+    d.el.classList.remove('dragging'); d.box.classList.remove('sorting');
+    const shown = [...d.box.querySelectorAll('.gchip')].map(x => x.dataset.gid);
+    const rest = (S.news?.prefs?.game_order || []).filter(g => !shown.includes(g));
+    const swallow = ev => { ev.stopPropagation(); ev.preventDefault(); };
+    document.addEventListener('click', swallow, { capture: true, once: true }); setTimeout(() => document.removeEventListener('click', swallow, true), 50);
+    newsAct({ act: 'game_order', value: [...shown, ...rest] });
+  };
+  document.addEventListener('pointerup', end);
+  document.addEventListener('pointercancel', end);
+})();
 function newsColor(gid) { const g = game(gid) || { id: gid }; return tint(g, allGames().indexOf(game(gid))); }
 
 async function renderNews() {
@@ -31,7 +64,7 @@ async function renderNews() {
   // 持续超过 60 天的是常驻说明（防沉迷、公平运营声明之类），不进日历和轮播
   const longTerm = it => it.start && it.end && bjMs(it.end) - bjMs(it.start) > 60 * 864e5;
   const items = (d.items || []).filter(it => !N.off.has(it.game) && !longTerm(it) && !it.hidden);
-  const gids = [...new Set((d.items || []).map(it => it.game))].sort((a, b) => (allGames().findIndex(g => g.id === a)) - (allGames().findIndex(g => g.id === b)));
+  const gids = [...new Set((d.items || []).map(it => it.game))].sort((a, b) => newsOrder(a) - newsOrder(b));
   const banners = newsBanners(d, N.focus);  // 点了上面某个游戏：轮播和日历都只看它的
   N.banners = banners; if (N.slide >= banners.length) N.slide = 0;
   const lastFetch = (d.sources || []).map(s => s.fetched).sort().pop() || '';
@@ -51,7 +84,7 @@ async function renderNews() {
     ${ganttHtml(N.focus ? items.filter(it => it.game === N.focus) : items, N.month, today)}
     <section class="glass panel">
       <div class="ph"><h3>来源</h3><span class="small faint">${d.fetching ? `<b style="color:var(--blue-ink)">正在读取${d.fetching_now ? `：${esc(d.fetching_now)}` : '…'}</b> · ` : ''}${lastFetch ? `上次读取 ${esc(mdhm(lastFetch))}（北京时间）` : '还没读取过'}${bad.length ? ` · <span style="color:var(--orange-ink)">${bad.length} 个来源没读到</span>` : ''}</span></div>
-      <div class="src-list">${(d.sources || []).map(s => `<div class="src"><i style="background:${newsColor(s.game)}"></i><b>${esc(shortName(s.game))}</b><span class="faint xsmall">${esc(SRC_TYPE[s.type] || s.type)}</span>${s.ok ? `<span class="badge ok">${s.count} 条</span>` : `<span class="badge bad" title="${esc(s.error)}">没读到</span><span class="xsmall faint err-t">${esc(s.error)}</span>`}
+      <div class="src-list">${(d.sources || []).filter(s => s.type !== 'ingame' || d.ingame_fallback).map(s => `<div class="src"><i style="background:${newsColor(s.game)}"></i><b>${esc(shortName(s.game))}</b><span class="faint xsmall">${esc(SRC_TYPE[s.type] || s.type)}</span>${s.ok ? `<span class="badge ok">${s.count} 条</span>` : `<span class="badge bad" title="${esc(s.error)}">没读到</span><span class="xsmall faint err-t">${esc(s.error)}</span>`}
         ${s.ok && s.incomplete ? `<span class="badge warn" title="${esc((s.incomplete_why || []).join('\n'))}">${s.incomplete} 条没读全</span><span class="xsmall faint err-t">${esc((s.incomplete_why || []).join('；'))}</span>` : ''}
         ${!s.ok || s.incomplete ? `<button type="button" class="btn xs" data-act="news-refresh" data-src="${esc(s.id)}">重读</button>` : ''}</div>`).join('') || '<div class="small faint">—</div>'}</div>
     </section>
@@ -66,7 +99,8 @@ const SRC_TYPE = { mihoyo_ann: '游戏内公告', mys_news: '米游社官方', h
 function newsBanners(d, focus = null) {
   const N = newsUiInit(); const nowMs = nowBjMs();
   const longTerm = it => it.start && it.end && bjMs(it.end) - bjMs(it.start) > 60 * 864e5;
-  const live = it => !it.end || bjMs(it.end) >= nowMs;
+  // 11-03：只放已经开始、还没结束的（以前只看没结束，还没开始的预告也被当成「当前活动」；它们在日历里是虚线框）
+  const live = it => (!it.end || bjMs(it.end) >= nowMs) && (!it.start || it.start_note === '最早读到' || bjMs(it.start) <= nowMs);
   const fresh = it => it.end || (it.start && nowMs - bjMs(it.start) < 14 * 864e5);
   const list = (d.items || []).filter(it => !N.off.has(it.game) && !longTerm(it) && !it.hidden && it.img && live(it) && fresh(it) && it.kind !== '常驻' && (it.kind !== '公告' || it.end) && (!focus || it.game === focus))
     .sort((a, b) => (bjMs(a.end) || 9e15) - (bjMs(b.end) || 9e15))
@@ -209,7 +243,7 @@ function ganttHtml(items, month, today) {
   const days = dates.length;
   const span = t1 - t0;
   const rows = items.filter(it => it.start && it.end && it.kind !== '常驻' && bjMs(it.end) > t0 && bjMs(it.start) < t1)
-    .sort((a, b) => (allGames().findIndex(g => g.id === a.game) - allGames().findIndex(g => g.id === b.game)) || (bjMs(a.start) - bjMs(b.start)));
+    .sort((a, b) => (newsOrder(a.game) - newsOrder(b.game)) || (bjMs(a.start) - bjMs(b.start)));
   const nowMs = nowBjMs();
   const pct = ms => Math.min(100, Math.max(0, (ms - t0) / span * 100));
   const hc = palName() === '高对比';

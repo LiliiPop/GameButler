@@ -592,6 +592,8 @@ def _apply(p: dict, body: dict):
         k = body.get("key")
         if k in ("push_followed", "push_images", "fetch_all"):
             p[k] = bool(body.get("value"))
+    elif a == "game_order":  # 活动页游戏的先后（批注 #174：拖动那排游戏）
+        p["game_order"] = [str(x)[:20] for x in (body.get("value") or []) if re.fullmatch(r"\w{1,20}", str(x))][:40]
     elif a == "news_off":  # 活动页 / 主页按游戏的显示开关（两边共用）
         toggle(p.setdefault("games_off", []), g, bool(body.get("value")))
     else:

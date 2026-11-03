@@ -24,6 +24,11 @@ import os
 import re
 
 
+# 批注 #175（11-03）：管家自己管的事，工具里的同类选项在管家里不显示、不传（保持工具的默认值）。
+# MaaSH 的「质检截图」是作用于全部任务的资源选项，原来每个任务下面都显示一遍；截图由管家「设置 → 运行记录输出 · 截图」管
+BUTLER_MANAGED = {"质检截图"}
+
+
 # ---------------- 读 JSON（容忍注释和尾逗号） ----------------
 def _strip_jsonc(s: str) -> str:
     out, i, n, in_str = [], 0, len(s), False
@@ -297,7 +302,7 @@ class Project:
             if n in out:
                 out.remove(n)
             out.append(n)
-        return [n for n in out if self._applies(self.options.get(n) or {})]
+        return [n for n in out if self._applies(self.options.get(n) or {}) and n not in BUTLER_MANAGED]
 
     def tr(self, text):
         return translate(self.iface, text, self.dir)

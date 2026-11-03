@@ -110,7 +110,7 @@ function rerunBad() {
 }
 
 // 导入工具自带的预设（11-02：挂上以后也能导入；MaaFramework 项目的 preset、MFA 的实例、工具默认勾选；BetterGI 的一条龙）
-const importBtn = g => ['maa', 'bettergi'].includes(g?.kind) ? '<button class="btn xs" data-act="routine-import" title="把工具里自带的预设做成任务预设">导入工具自带的预设</button>' : '';
+// 批注 #177（11-03）：入口挪到「设置 → 工具与游戏」每个脚本那一行
 async function importToolRoutines(gid) {
   let r; try { r = await api('GET', `/api/games/${encodeURIComponent(gid)}/tool-routines`); } catch (e) { return fail(e); }
   const list = r.routines || [];
@@ -122,7 +122,7 @@ async function importToolRoutines(gid) {
   if (!Array.isArray(v) || !v.length) return;
   try {
     const res = await api('POST', `/api/games/${encodeURIComponent(gid)}/import-routines`, { names: v });
-    toast(res.imported.length ? `已导入：${res.imported.join('、')}` : '没有导入');
+    toast(res.imported.length ? `已导入：${res.imported.join('、')}（在游戏页「任务预设」里）` : '没有导入');
     await loadState();
     if (S.ed?.gid === gid) { if (res.imported[0]) S.ed.routineName = res.imported[0]; await loadEditor(gid, S.ed.tab); renderGame(); }
   } catch (e) { fail(e); }
@@ -141,15 +141,15 @@ function routineCard(g) {
   if (onRoutine && cur) {
     acts = `${presets.length ? `<select class="sel" style="max-width:none" data-act="apply-src" aria-label="从 MAA 预设换一套…"><option value="" selected disabled>从 MAA 预设换一套…</option>
         <optgroup label="MAA 自带预设">${presets.map(p => `<option value="p:${esc(p.name)}" ${p.error ? `disabled title="${esc(p.error)}"` : ''}>${esc(p.name)}${p.error ? `（不能用：${esc(p.error)}）` : ''}</option>`).join('')}</optgroup></select>` : ''}
-      <div class="rc-btns"><button class="btn xs" data-act="routine-new">另存为新预设</button><button class="btn xs" data-act="routine-rename">重命名</button><button class="btn xs" data-act="routine-del">删除</button>${importBtn(g)}</div>`;
+      <div class="rc-btns"><button class="btn xs" data-act="pk-new" data-gid="${esc(g.id)}" title="新建一套空的任务预设（只有启动游戏），再往里加任务">新建预设</button><button class="btn xs" data-act="routine-new">另存为新预设</button><button class="btn xs" data-act="routine-rename">重命名</button><button class="btn xs" data-act="routine-del">删除</button></div>`;
   } else if (onRoutine) {
-    acts = `<div class="rc-btns"><button class="btn xs" data-act="routine-new">新建一套</button>${importBtn(g)}</div>`;
+    acts = `<div class="rc-btns"><button class="btn xs" data-act="pk-new" data-gid="${esc(g.id)}">新建预设</button></div>`;
   }
   const list = names.map(n => {
     const on = n === cur;
     const act = onRoutine ? `data-act="routine-pick"` : `data-act="routine-goto"`;
     return `<a href="#/g/${esc(g.id)}/routine" ${act} data-name="${esc(n)}" class="${on ? 'on' : ''}" ${on ? 'aria-current="page"' : ''}><span>${esc(n)}</span><span class="xsmall faint num">${(doc.routines[n].tasks || []).length} 项</span></a>`;
-  }).join('') || '<div class="xsmall faint">还没有任务预设：点「新建一套」，或「导入工具自带的预设」</div>';
+  }).join('') || '<div class="xsmall faint">还没有任务预设：点「新建预设」，或到「设置 → 工具与游戏」导入工具自带的预设</div>';
   return `<section data-card="routine" class="panel glass navcard ${onRoutine ? 'on' : 'thin'}" ${onRoutine ? 'aria-current="page"' : `data-act="goto-tab" data-tab="routine" role="link" tabindex="0" aria-label="任务预设"`}><div class="ph"><h3>任务预设</h3>${onRoutine ? '<span class="xsmall faint">正在管理</span>' : ICON.right}</div>
     ${top}<div class="rlist">${list}</div>${acts ? `<div class="rc-acts">${acts}</div>` : ''}</section>`;
 }
@@ -162,8 +162,9 @@ function routineExtrasHtml(g) {
   const ag = Object.entries(ed.again || {});
   return `<section class="rx">
     <div class="rx-row"><b>定时</b><div class="rx-c">${rules.length ? rules.map(chip).join('') : `<button type="button" class="linkbtn pr-norule" data-act="rule-add" data-gid="${esc(ed.gid)}" data-name="${esc(cur)}" title="点这里加定时">没有定时：手动跑</button>`}</div></div>
-    <div class="rx-row"><b>自动重复</b><div class="rx-c">${ag.map(([k, a]) => `<button type="button" class="chip" data-act="again-edit" data-key="${esc(k)}" title="点开改">${esc(tn(k))}：${esc(againText(a))}</button>`).join('')}
-      <button type="button" class="btn ghost" data-act="again-edit" data-key="">＋ 选一个任务</button><span class="xsmall faint">只对选的那个任务生效：做完隔几小时再跑一轮，或到点再跑</span></div></div>
+    <div class="rx-row"><b>自动重复</b><div class="rx-c">${(ed.again || {})['*'] ? `<button type="button" class="chip" data-act="again-edit" data-key="*" title="点开改">整套：${esc(againText(ed.again['*']))}</button>`
+        : `<button type="button" class="btn ghost" data-act="again-edit" data-key="*">＋ 设置自动重复</button><span class="xsmall faint">这一整套预设做完后隔几小时再跑一轮，或到点再跑</span>`}
+      ${ag.filter(([k]) => k !== '*').map(([k, a]) => `<button type="button" class="chip" data-act="again-edit" data-key="${esc(k)}" title="以前给单个任务设的，点开改或取消">${esc(tn(k))}：${esc(againText(a))}</button>`).join('')}</div></div>
   </section>`;  // 11-02：「资源记录」（读公告 / 读资源）挪到设置 → 游戏内读取
 }
 document.addEventListener('change', async e => {
@@ -238,14 +239,15 @@ async function todayReset(key) {
 async function againEdit(key) {
   const ed = S.ed; const rec = game(ed.gid)?.recovery_task;
   const keys = ed.tasks.map(keyOf).filter(k => k !== rec && !(ed.tasks.find(t => keyOf(t) === k) && taskDef(ed.tasks.find(t => keyOf(t) === k).task)?.kind === 'finish'));
-  const a = key ? ed.again[key] : {};
-  const v = await modal({ title: key ? `自动重复 · ${tn(key)}` : '自动重复：选一个任务', ok: '确定', alt: key ? '不再自动重复' : '', body: `<div class="bedit">
-    <label class="field-row"><b>任务</b><select class="sel" id="ag-k" ${key ? 'disabled' : ''}>${keys.map(k => `<option value="${esc(k)}" ${k === key ? 'selected' : ''}>${esc(tn(k))}</option>`).join('')}</select></label>
+  const all = key === '*';  // 批注 #179：整套预设自动重复
+  const a = (key && ed.again?.[key]) || {};
+  const v = await modal({ title: all ? `自动重复 · 整套「${ed.routineName}」` : key ? `自动重复 · ${tn(key)}` : '自动重复：选一个任务', ok: '确定', alt: key && ed.again?.[key] ? '不再自动重复' : '', body: `<div class="bedit">
+    ${all ? '<input type="hidden" id="ag-k" value="*">' : `<label class="field-row"><b>任务</b><select class="sel" id="ag-k" ${key ? 'disabled' : ''}>${keys.map(k => `<option value="${esc(k)}" ${k === key ? 'selected' : ''}>${esc(tn(k))}</option>`).join('')}</select></label>`}
     <div class="field-row"><b>怎么重复</b><div class="be-start">
       <label class="rad"><input type="radio" name="ag-m" value="relay" ${!a.at?.length ? 'checked' : ''}> 做完后每隔 <input class="inp xs num" type="number" min="1" max="23" id="ag-h" value="${a.every_hours || 6}" style="width:64px"> 小时再跑，当天最多 <input class="inp xs num" type="number" min="2" max="8" id="ag-n" value="${a.max_rounds || 3}" style="width:64px"> 轮</label>
       <label class="rad"><input type="radio" name="ag-m" value="at" ${a.at?.length ? 'checked' : ''}> 到点再跑：<input class="inp xs" id="ag-t" value="${esc((a.at || []).map(bjToLocal).join(', ') || '14:00, 20:30')}" style="width:150px"> <span class="xsmall faint">本地时间，逗号隔开</span></label>
     </div></div>
-    <div class="xsmall faint">只对这一个任务生效。上一轮没做成（失败或无可做）后面的轮次不再排；来不及在今天刷新前做的也不排。</div></div>`,
+    <div class="xsmall faint">${all ? '整套预设里的每一项都这样重复（启动游戏除外）。' : '只对这一个任务生效。'}上一轮没做成（失败或无可做）后面的轮次不再排；来不及在今天刷新前做的也不排。</div></div>`,
     onMount: (m, setVal) => setVal(() => {
       const k = $('#ag-k', m).value; const mode = (m.querySelector('input[name="ag-m"]:checked') || {}).value;
       return { k, a: mode === 'at' ? { at: $('#ag-t', m).value.split(/[,，\s]+/).filter(x => /^\d{1,2}:\d{2}$/.test(x)).map(localToBj) } : { every_hours: +$('#ag-h', m).value || 6, max_rounds: +$('#ag-n', m).value || 3 } };
@@ -377,7 +379,7 @@ function taskBody(t, i, td, off, st) {
     ${td && Object.keys(t.choices || {}).length ? `<button class="btn xs" data-act="reset-opts" data-i="${i}">${bgi ? '恢复为 BetterGI 设置' : '选项恢复为 MAA 设置'}</button>` : ''}
     <span style="flex:1"></span>
     <button class="btn xs warn" data-act="remove" data-i="${i}">移除</button>
-    <button class="btn xs" data-act="save" data-save-slot title="Ctrl+S" ${S.dirty ? '' : 'hidden'}>保存</button></div>`;
+    <button class="btn xs" data-act="save-one" data-i="${i}" data-save-slot title="只保存这一项的修改；下面的「保存任务预设」保存整套" ${S.dirty ? '' : 'hidden'}>保存此项</button></div>`;
   return h + '</div>';
 }
 
@@ -730,6 +732,25 @@ function cleanTasks(tasks) {
   return tasks.map(t => { const o = { task: t.task, choices: t.choices || {} }; if (t.key) o.key = t.key; return o; });
 }
 
+// 批注 #176（11-03）：任务里的「保存此项」只保存这一项（其他任务的改动留着、还算没保存）；下面的「保存任务预设」保存整套
+async function saveOne(i) {
+  const ed = S.ed; if (!ed || ed.tab !== 'routine') return save();
+  const a = document.activeElement;
+  if (a && a.matches?.('#tlist input, #tlist select, #tlist textarea')) { a.dispatchEvent(new Event('change', { bubbles: true })); a.blur(); }
+  const cur = ed.tasks[i]; if (!cur) return;
+  const before = JSON.parse(ed.saved || '[]'); const k = keyOf(cur);
+  const next = before.slice(); const j = before.findIndex(t => keyOf(t) === k);
+  if (j >= 0) next[j] = clone(cur); else next.splice(Math.min(i, next.length), 0, clone(cur));
+  if (JSON.stringify(next) === JSON.stringify(ed.tasks)) return save();  // 只改了这一项：和保存整套一样
+  try {
+    const old = ed.routines.routines[ed.routineName] || {};
+    ed.routines.routines[ed.routineName] = { ...old, tasks: cleanTasks(next) };
+    await api('PUT', `/api/routines/${encodeURIComponent(ed.gid)}`, { routines: ed.routines.routines });
+    ed.saved = JSON.stringify(next); ed.savedAt = new Date();
+    toast(`已保存「${tn(cur.task)}」；其他任务的修改还没保存`);
+    touch(true);
+  } catch (e) { fail(e); }
+}
 async function save(quiet = false) {
   // 正在输入的框先把值交上来（不然点「保存」时它失焦触发的修改会在保存之后才到，保存完又变成「有未保存的修改」）
   const a = document.activeElement;
@@ -741,7 +762,7 @@ async function save(quiet = false) {
     if (ed.tab === 'today') return todaySave();  // 今日任务：问「覆盖预设」还是「仅今日」
     if (ed.tab !== 'routine') return true;
     const keys = new Set(ed.tasks.map(keyOf));
-    const again = Object.fromEntries(Object.entries(ed.again || {}).filter(([k]) => keys.has(k)));  // 任务删掉了，它的自动重复也不要了
+    const again = Object.fromEntries(Object.entries(ed.again || {}).filter(([k]) => k === '*' || keys.has(k)));  // 任务删掉了，它的自动重复也不要了；「*」= 整套
     ed.routines.routines[ed.routineName] = { tasks: cleanTasks(ed.tasks), ...(Object.keys(again).length ? { again } : {}) };
     await api('PUT', `/api/routines/${encodeURIComponent(ed.gid)}`, { routines: ed.routines.routines });
     toast(`已保存任务预设「${ed.routineName}」`);

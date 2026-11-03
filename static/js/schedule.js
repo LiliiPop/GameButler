@@ -43,7 +43,7 @@ async function renderSchedule() {
     <section class="hero">
       <div><span class="eyebrow num">${esc(dayEyebrow(d.day))}</span>
         <h1>日程</h1>
-        <div class="small muted">安排每日日常列表</div></div>
+        <div class="small muted">已设置定时的任务序列会自动加入每日日程，也可手动添加任务到日程安排。</div></div>
       <div class="hero-side">
         <button class="btn" data-act="sch-settings">调度设置</button>
         ${S.running?.running ? '' : '<button class="btn dark" data-act="run-all">开始全部</button>'}
@@ -278,6 +278,15 @@ function daysEditor(days) {
   return `<div class="be-days"><label class="rad"><input type="radio" name="wd" value="daily" ${daily ? 'checked' : ''}> 每天</label>
     <label class="rad"><input type="radio" name="wd" value="week" ${daily ? '' : 'checked'}> 每周 ${[1, 2, 3, 4, 5, 6, 7].map(n => `<label class="chk"><input type="checkbox" data-wd="${n}" ${set.has(n) ? 'checked' : ''}> ${WEEK_MON[n - 1]}</label>`).join('')}</label></div>`;
 }
+// 批注 #180（11-03）：「每天」和「每周几」不能同时选：勾了星期几自动换成「每周」；选「每天」清掉星期几；星期几全取消 = 每天
+document.addEventListener('change', e => {
+  const box = e.target.closest?.('.be-days'); if (!box) return;
+  const daily = box.querySelector('input[name="wd"][value="daily"]'), week = box.querySelector('input[name="wd"][value="week"]');
+  const days = [...box.querySelectorAll('[data-wd]')];
+  if (e.target.matches('[data-wd]')) { if (days.some(x => x.checked)) week.checked = true; else daily.checked = true; }
+  else if (e.target === daily && daily.checked) days.forEach(x => { x.checked = false; });
+  else if (e.target === week && week.checked && !days.some(x => x.checked)) { daily.checked = true; toast('先勾上每周哪几天'); }
+});
 function readDays(m) {
   if ((m.querySelector('input[name="wd"]:checked') || {}).value !== 'week') return 'daily';
   return $$('[data-wd]', m).filter(x => x.checked).map(x => +x.dataset.wd);
@@ -607,7 +616,7 @@ async function renderPresets() {
       <div class="pk-h"><b>${esc(r.name)}</b><span class="num faint xsmall">${tasks.length} 项</span></div>
       <div class="pk-whens">${when}</div>
       <ol class="pk-tasks" tabindex="0" aria-label="任务（滚轮看全部）">${tasks.map(k => `<li>${esc(tn(k))}</li>`).join('') || '<li class="faint">还没有任务</li>'}</ol>
-      ${tasks.length > 5 ? `<div class="pk-more xsmall faint">还有 ${tasks.length - 5} 项 · 鼠标放上来用滚轮看</div>` : ''}
+      ${tasks.length > 5 ? `<div class="pk-more xsmall faint">还有 ${tasks.length - 5} 项</div>` : ''}
       <div class="pk-acts">
         <button type="button" class="pk-ic" data-act="pk-queue" data-gid="${esc(x.game)}" data-name="${esc(r.name)}" data-tip="加入队列：排在今天的队尾" aria-label="加入队列">${PR_ICON.queue}</button>
         <button type="button" class="pk-ic" data-act="routine-open" data-gid="${esc(x.game)}" data-name="${esc(r.name)}" data-tip="编辑预设：改任务和选项" aria-label="编辑预设">${PR_ICON.edit}</button>
@@ -630,6 +639,18 @@ async function renderPresets() {
     }).join('') || '<div class="b-empty">还没有挂游戏</div>'}</div>
   </div>`;
 }
+// 批注 #173（11-03）：看板在空白处（列与列之间、卡片下面）按住左右拖动，鼠标是小手
+(() => {
+  let pan = null;
+  document.addEventListener('pointerdown', e => {
+    const b = e.target.closest?.('.pk-board');
+    if (!b || e.button !== 0 || e.target.closest('.pk-card,button,a,input,select,textarea')) return;
+    pan = { b, x0: e.clientX, s0: b.scrollLeft }; b.classList.add('panning'); e.preventDefault();
+  });
+  document.addEventListener('pointermove', e => { if (pan) pan.b.scrollLeft = pan.s0 - (e.clientX - pan.x0); });
+  const end = () => { if (pan) { pan.b.classList.remove('panning'); pan = null; } };
+  document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end); window.addEventListener('blur', end);
+})();
 async function presetAct(act, el) {
   const gid = el.dataset.gid, name = el.dataset.name;
   try {
@@ -662,7 +683,9 @@ async function presetAct(act, el) {
       const rec = game(gid)?.recovery_task;
       doc[n] = { tasks: rec ? [{ task: rec, choices: {} }] : [] };
       await api('PUT', `/api/routines/${encodeURIComponent(gid)}`, { routines: doc });
-      S.pendingRoutine = n; location.hash = `#/g/${gid}/routine`;
+      if (S.route?.view === 'game' && S.ed?.gid === gid && location.hash === `#/g/${gid}/routine`) {  // 已经在这个游戏的任务预设页（批注 #178）
+        S.ed.routineName = n; await loadState(); await loadEditor(gid, 'routine'); renderGame(); toast(`已新建「${n}」：点「修改预设」加任务`);
+      } else { S.pendingRoutine = n; location.hash = `#/g/${gid}/routine`; }
     }
   } catch (e) { fail(e); }
 }

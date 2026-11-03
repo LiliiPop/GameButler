@@ -58,6 +58,8 @@ def _(api, m, q, b):
         pr = GD.match_preset(d)
         if pr:
             d["preset"] = {"id": pr["id"], "name": pr["name"], "refresh": (pr.get("config") or {}).get("refresh", "")}
+            # 批注 #171（11-03）：显示名字默认用游戏名（预设里的，例如「时空中的绘旅人」），不用工具自己的名字（「MaaSH」）
+            d["name"] = (pr.get("config") or {}).get("name") or d.get("name", "")
     return d
 
 

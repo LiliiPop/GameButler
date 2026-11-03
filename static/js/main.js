@@ -79,10 +79,11 @@ document.addEventListener('click', async e => {
     case 'routine-pick': routineOp('pick', el.dataset.name); break;
     case 'routine-goto': routineOp('goto', el.dataset.name); break;
     case 'routine-new': routineOp('new'); break;
-    case 'routine-import': importToolRoutines(S.ed?.gid); break;
+    case 'routine-import': importToolRoutines(el.dataset.gid || S.ed?.gid); break;
     case 'routine-rename': routineOp('rename'); break;
     case 'routine-del': routineOp('del'); break;
     case 'save': save(); break;
+    case 'save-one': saveOne(+el.dataset.i); break;
     case 'discard': discard(); break;
     case 'run-task': { const id = el.dataset.id; ed.openRuns.has(id) ? ed.openRuns.delete(id) : ed.openRuns.add(id); renderRuns(); break; }
     case 'runs-refresh': renderRuns(); break;

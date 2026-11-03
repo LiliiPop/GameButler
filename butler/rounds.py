@@ -46,7 +46,7 @@ def check_preset(g: dict, again, keys: set[str]) -> dict:
         raise ValueError("自动重复要写成 {任务: 设置}")
     out = {}
     for k, a in again.items():
-        if k not in keys:
+        if k != "*" and k not in keys:  # 「*」= 整套预设（批注 #179）
             raise ValueError(f"自动重复里的「{k}」不在这套任务预设里")
         c = check(g, a)
         if c:
@@ -83,7 +83,8 @@ def expand(g: dict, tasks: list[dict], a: dict, status: dict, prev_status: dict,
         if it["task"] == rec_task:
             continue
         base = item_key(it)
-        ai = a.get(base)
+        ai = a.get(base) or (a.get("*") if it["task"] not in ("🏁 结束后操作", "米游社签到") else None)
+        # 批注 #179（11-03）：「*」= 整套预设自动重复（每项做完隔几小时再跑 / 到点再跑）；BetterGI 的「🏁 结束后操作」、每天一次的米游社签到不重复
         if not ai:
             continue
         hours = float(ai.get("every_hours") or 0)

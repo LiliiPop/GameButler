@@ -24,7 +24,7 @@ function gameRow(t) {
     <div class="tr-b">
       <div class="small num tr-path">${esc(t.path)}</div>
       <div class="tr-acts"><button class="btn xs" data-act="tool-browse" data-gid="${esc(t.id)}">换文件夹</button>${t.preset ? `<button class="btn xs" data-act="tool-scan" data-gid="${esc(t.id)}">自动查找</button>` : ''}
-        <button class="btn xs ghost" data-act="tool-check" data-gid="${esc(t.id)}" title="查一遍：文件夹和工具文件在不在、模拟器实例对不对、分辨率合不合要求">检查</button>${t.url ? `<a class="btn xs ghost" href="https://github.com/${esc(t.url)}" target="_blank" rel="noopener">去下载</a>` : ''}${emuSel}</div>
+        <button class="btn xs ghost" data-act="tool-check" data-gid="${esc(t.id)}" title="查一遍：文件夹和工具文件在不在、模拟器实例对不对、分辨率合不合要求">检查</button>${['maa', 'bettergi'].includes(t.type) && t.available ? `<button class="btn xs ghost" data-act="routine-import" data-gid="${esc(t.id)}" title="把工具里自带的预设（MAA 的预设、MFA 的实例、工具默认勾选；BetterGI 一条龙）做成任务预设">导入工具自带的预设</button>` : ''}${t.url ? `<a class="btn xs ghost" href="https://github.com/${esc(t.url)}" target="_blank" rel="noopener">去下载</a>` : ''}${emuSel}</div>
       ${t.screen ? `<div class="xsmall faint">要求：${esc(t.screen)}</div>` : ''}
       ${!t.available && t.message ? `<div class="xsmall bwarn">${ICON.warn} ${esc(t.message)}${t.preset_id ? '（自动查找没找到：点「换文件夹」手动选）' : '（点「换文件夹」重新选）'}</div>` : ''}
       <div class="tr-check" id="tc-${esc(t.id)}"></div></div>
@@ -158,10 +158,11 @@ async function openAddScript(preset) {
     const tr = d.tool_routines || [];
     const ans = await modal({ title: `重新挂载「${d.restore.name}」？`, ok: '重新挂载',
       body: `<div class="small">这个脚本以前挂过。重新挂载会恢复原来的设置、计划和记录；路径变了的话只更新路径。</div>
+        <label class="fld" style="margin-top:10px">显示名字 <input class="inp" id="rs-name" value="${esc(d.restore.name)}"></label>
         ${tr.length ? `<label class="fld chk" style="margin-top:10px"><input type="checkbox" id="rs-import"> 一同导入工具自带的预设：${esc(tr.join('、'))}</label>` : ''}`,
-      onMount: (m, setVal) => setVal(() => ({ imp: !!m.querySelector('#rs-import')?.checked })) });
+      onMount: (m, setVal) => setVal(() => ({ imp: !!m.querySelector('#rs-import')?.checked, name: m.querySelector('#rs-name')?.value.trim() || '' })) });
     if (!ans) return;
-    try { const r = await api('POST', '/api/games', { ...d, import_tool_routines: !!ans.imp }); toast(`已重新挂载「${d.restore.name}」`); await afterMountChange(); location.hash = `#/g/${r.id}/today`; } catch (e) { fail(e); }
+    try { const r = await api('POST', '/api/games', { ...d, import_tool_routines: !!ans.imp, display_name: ans.name }); toast(`已重新挂载「${ans.name || d.restore.name}」`); await afterMountChange(); location.hash = `#/g/${r.id}/today`; } catch (e) { fail(e); }
     return;
   }
   S.emus = S.emus || await api('GET', '/api/emulators');
@@ -320,7 +321,7 @@ async function renderSettings() {
       <div id="tools-host"><div class="small faint" style="padding:0 6px">读取中…</div></div>
     </section>
     <section class="lib glass set" id="set-mys">
-      <div class="section-h" style="padding:0 4px"><h2>米游社账号</h2><span class="small muted">扫码登录一次，原神、崩铁、未定事件簿的「米游社签到」由管家自己完成（不用装胡桃）</span></div>
+      <div class="section-h" style="padding:0 4px"><h2>米游社账号</h2><span class="small muted">扫码登录一次，完成原神、崩铁、未定事件簿的「米游社签到」</span></div>
       <div id="mys-host">${mysHtml(S.mys)}</div>
     </section>
     <section class="lib glass set" id="set-selfupdate">
@@ -400,12 +401,11 @@ async function loadEvidenceSection() {
   const games = d.games || [];
   const f = d.fail || {};
   box.innerHTML = `<div class="section-h" style="padding:0 4px"><h2>运行记录输出 · 截图</h2><span class="small muted num">留证 ${d.files || 0} 张 · ${d.mb || 0} MB　失败 ${f.files || 0} 张 · ${f.mb || 0} MB</span></div>
-    <div class="small muted" style="padding:0 6px">两种截图，都只在电脑上看，不会推送到微信：<br><b>留证截图</b>：勾选的任务做成时截一张游戏画面（地宫选层这类关键步骤也会截），用来核对「到底做没做、做的是哪个」；任务没做成就不留证。目前只支持模拟器上的游戏。<br><b>失败截图</b>：任何任务卡住或失败时自动截的，看停在哪个画面；自动保留 14 天。</div>
     ${games.map(g => { const on = g.tasks.filter(t => t.on).length; return `<details class="ev-game"${on ? ' open' : ''}><summary><i style="background:${newsColor(g.id)}"></i><b>${esc(g.name)}</b><span class="small faint">已选 ${on} 个</span></summary>
       <div class="ev-tasks">${g.tasks.map(t => `<label class="ev-t"><input type="checkbox" data-ev-game="${esc(g.id)}" value="${esc(t.task)}" ${t.on ? 'checked' : ''}><span>${esc(tn(t.task))}</span></label>`).join('')}</div></details>`; }).join('') || '<div class="small faint" style="padding:0 6px">没有可以截图的游戏</div>'}
     <div class="lrow"><div class="nm"><b>保留天数</b><div>超过这个天数的留证截图会自动删除</div></div>
       <input class="inp num" id="ev-keep" type="number" min="1" max="60" value="${esc(d.keep_days)}" style="width:90px"></div>
-    <div class="push-acts"><button class="btn sm warn" data-act="ev-clean" data-all="1">删除全部留证截图</button><button class="btn sm" data-act="ev-clean" data-all="0">只删今天以前的</button><span style="flex:1"></span><span class="xsmall faint">改了就自动保存</span></div>
+    <div class="push-acts" style="justify-content:flex-end"><button class="btn sm warn" data-act="ev-clean" data-all="1">删除全部留证截图</button><button class="btn sm" data-act="ev-clean" data-all="0">只删今天以前的</button></div>
     <div class="lrow"><div class="nm"><b>失败截图</b><div>已存 ${f.files || 0} 张 · ${f.mb || 0} MB。删掉后运行记录里对应的截图就看不到了。</div></div>
       <div class="push-acts"><button class="btn sm warn" data-act="ev-clean" data-what="fail" data-all="1">删除全部失败截图</button><button class="btn sm" data-act="ev-clean" data-what="fail" data-all="0">只删今天以前的</button></div></div>`;
 }

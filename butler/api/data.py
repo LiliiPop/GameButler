@@ -53,7 +53,9 @@ def _(api, m, q, b):
 @route("GET", "/api/news")
 def _(api, m, q, b):
     run = news_running()
+    from .. import settings as S
     return {**news.load(api.cfg), "tz": api.cfg["machine"]["timezone"], "fetching": bool(run),
+            "ingame_fallback": S.get(api.cfg, "news")["ingame_fallback"],  # 批注 #172：没允许时，活动页不列游戏内来源
             "fetching_now": news_now(api.data_dir, run) if run else ""}
 
 

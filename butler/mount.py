@@ -216,6 +216,8 @@ def add(cfg: dict, info: dict) -> dict:
         if info.get("project_name"):
             g["project_name"] = info["project_name"]
         g["followed"] = True
+        if (info.get("display_name") or "").strip():  # 批注 #171：重新挂载时填的显示名字
+            g["name"] = info["display_name"].strip()
         GD.save(cfg, same, g)
         autofix(cfg, same, force=True)
         if info.get("import_tool_routines"):  # 11-02：重新挂载时也能选「一同导入工具自带的预设」

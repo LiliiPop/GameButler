@@ -1355,3 +1355,22 @@ body.sorting,body.sorting *{cursor:grabbing!important;user-select:none}
 /* 米游社账号（11-02）：每个游戏一行 */
 .mys-g{margin-top:6px;font-size:13px}
 .mys-g > b{margin-right:8px}
+/* 批注 #170（11-03）：有边框 / 底色的按钮里的字不要下划线，哪怕按钮是个链接（<a class="btn">）；看起来像文字链接的 .ghost / .text 不变 */
+.btn:not(.ghost):not(.text),a.btn:not(.ghost):not(.text),.btn:not(.ghost):not(.text):hover,a.btn:not(.ghost):not(.text):hover{text-decoration:none}
+/* 批注 #174（11-03）：活动页那排游戏按住拖动排序 */
+.chips .gchip[data-act="news-focus"]{touch-action:none}
+.chips.sorting .gchip{cursor:grabbing}
+.gchip.dragging{opacity:.55}
+/* 批注 #173：任务预设看板在空白处按住左右拖动 */
+.pk-board{cursor:grab}
+.pk-board.panning{cursor:grabbing;user-select:none}
+.pk-board .pk-card,.pk-board button,.pk-board a{cursor:pointer}
+.pk-board .pk-card .pk-tasks{cursor:auto}
+/* 批注 #183（11-03）：列表最后一项下面不画线（和第一项上面一样） */
+.sch-list > .bcard:last-child,.sch-list > .bcard:last-of-type{border-bottom:0}
+/* 批注 #188（11-03）：每块最后一行下面不画线（设置的各块、脚本列表、截图的游戏列表） */
+section.set > .lrow:last-child,section.set .tools > .trow:last-child,section.set > .ev-game:last-of-type:last-child,#mys-host > .lrow:last-child,#su-host > .lrow:last-child,#upd-host > .lrow:last-child,#mumu-host .lrow:last-child,#tools-host .lrow:last-child{border-bottom:0}
+/* 批注 #190：标题线下面第一行文字的距离各块一致（和设置行 .lrow 一样：线下 26px） */
+section.set > .section-h + .push-help{padding-top:13px}
+section.set > .section-h + div.small{padding-top:13px}
+section.set > .section-h + .ev-game{padding-top:16px}

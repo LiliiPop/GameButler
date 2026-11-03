@@ -70,7 +70,12 @@ def read(src: dict, data_dir: Path, miss) -> list[dict]:
         desc = _meta(p, "og:description", "description")
         body = strip_html(re.sub(r"(?is)<head.*?</head>", "", p))
         i = body.find(title[:12]) if title else -1
-        text = (desc + "\n" + (body[i:i + 3000] if i >= 0 else "")).strip()
+        seg = body[i:i + 3000] if i >= 0 else ""
+        # 11-03：帖子正文后面是「猜你想搜」「前往论坛」和别人的帖子、评论——不能算进正文（恋与深空「庆生日历」帖子本身没写时间，
+        # 却从后面别人的帖子里认出了 11/21~11/30）。截到第一个这样的标记为止
+        cut = [k for k in (seg.find(mk) for mk in ("猜你想搜", "前往论坛", "去论坛查看", "热门评论", "全部评论")) if k > 0]
+        seg = seg[:min(cut)] if cut else seg
+        text = (desc + "\n" + seg).strip()
         img = _meta(p, "og:image", "twitter:image")
         img = img if "tapimg.com" in img else ""
         more = list(dict.fromkeys(re.findall(r'https://img\d*-tc\.tapimg\.com/moment/[^"\'\s)<>\\]+', p)))  # 帖子里的其他图（11-02）
