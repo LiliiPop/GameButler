@@ -7,6 +7,14 @@
 const localMdhm = ms => { const d = new Date(ms); return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const bothTimes = bj => { const ms = bjMs(bj); return isNaN(ms) ? '' : `${mdhm(bj)}（北京时间）· 本地 ${localMdhm(ms)}`; };
 // 开始时间：「10月22日更新后」照原话显示（不写 00:00）；开始时间不知道的（代号鸢活动页）写「不晚于 第一次读到的时间」
+// 11-03：「10月22日更新后」这类只写了日期的开始时间（后台存成 00:00）：按那个游戏的刷新时间算（代号鸢 05:00、原神 04:00）
+const refreshMin = gid => { const m = String(game(gid)?.refresh || '').match(/(\d+):(\d+)/); return m ? +m[1] * 60 + +m[2] : null; };
+const earliestRefreshMin = () => Math.min(...(S.state?.games || []).filter(g => g.available !== false).map(g => refreshMin(g.id)).filter(x => x != null), Infinity);
+const newsStartMs = it => {
+  const t = bjMs(it.start);
+  if (isNaN(t) || !/^(更新|维护|开服)后$/.test(it.start_note || '') || !/ 00:00/.test(it.start)) return t;
+  const rm = refreshMin(it.game); return rm == null ? t : t + rm * 6e4;
+};
 const newsStart = it => it.forecast ? `预计 ${mdhm(it.start).slice(0, 5)}（${it.start_note || '预告'}，以正式公告为准）` : it.start_note === '最早读到' ? `不晚于 ${bothTimes(it.start)}`
   : it.start_note ? `${mdhm(it.start).slice(0, 5)} ${it.start_note}（北京时间）` : bothTimes(it.start);
 const leftText = bj => {
@@ -100,7 +108,7 @@ function newsBanners(d, focus = null) {
   const N = newsUiInit(); const nowMs = nowBjMs();
   const longTerm = it => it.start && it.end && bjMs(it.end) - bjMs(it.start) > 60 * 864e5;
   // 11-03：只放已经开始、还没结束的（以前只看没结束，还没开始的预告也被当成「当前活动」；它们在日历里是虚线框）
-  const live = it => (!it.end || bjMs(it.end) >= nowMs) && (!it.start || it.start_note === '最早读到' || bjMs(it.start) <= nowMs);
+  const live = it => (!it.end || bjMs(it.end) >= nowMs) && (!it.start || it.start_note === '最早读到' || newsStartMs(it) <= nowMs);
   const fresh = it => it.end || (it.start && nowMs - bjMs(it.start) < 14 * 864e5);
   const list = (d.items || []).filter(it => !N.off.has(it.game) && !longTerm(it) && !it.hidden && it.img && live(it) && fresh(it) && it.kind !== '常驻' && (it.kind !== '公告' || it.end) && (!focus || it.game === focus))
     .sort((a, b) => (bjMs(a.end) || 9e15) - (bjMs(b.end) || 9e15))
@@ -224,26 +232,30 @@ function startBannerTimer() {
 const mondayOf = day => { const [y, m, d] = day.split('-').map(Number); const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); return addDays(day, -((wd + 6) % 7)); };
 function ganttHtml(items, month, today) {
   const N = S.newsUi; const view = N.view === 'week' ? 'week' : 'month';
+  // 11-03：每一格是一个游戏日（从刷新时间到第二天刷新时间），竖线才和「今天」那格对得上；
+  // 只看一个游戏时按它的刷新时间，看全部时按最早刷新的那个
+  const rmF = N.focus ? refreshMin(N.focus) : null, rmE = earliestRefreshMin();
+  const off = (rmF != null ? rmF : isFinite(rmE) ? rmE : 0) / 60;
   let t0, t1, dates, title, prevA, nextA, resetA;
   if (view === 'week') {
     const a = N.week || mondayOf(today);
     const [y, m, d] = a.split('-').map(Number);
-    t0 = Date.UTC(y, m - 1, d, -8); t1 = t0 + 7 * 864e5;
+    t0 = Date.UTC(y, m - 1, d, -8 + off); t1 = t0 + 7 * 864e5;
     dates = Array.from({ length: 7 }, (_, i) => addDays(a, i));
     title = `${+dates[0].slice(5, 7)} 月 ${+dates[0].slice(8)} 日 – ${+dates[6].slice(5, 7)} 月 ${+dates[6].slice(8)} 日`;
     prevA = addDays(a, -7); nextA = addDays(a, 7); resetA = mondayOf(today);
   } else {
     const [y, m] = month.split('-').map(Number);
     const n = new Date(Date.UTC(y, m, 0)).getUTCDate();
-    t0 = Date.UTC(y, m - 1, 1, -8); t1 = Date.UTC(y, m, 1, -8); // 北京时间本月 1 日 0 点 ~ 下月 1 日 0 点
+    t0 = Date.UTC(y, m - 1, 1, -8 + off); t1 = Date.UTC(y, m, 1, -8 + off); // 本月 1 日这个游戏日开始（北京时间刷新时刻）~ 下月 1 日
     dates = Array.from({ length: n }, (_, i) => `${month}-${pad(i + 1)}`);
     title = `${y} 年 ${m} 月`;
     prevA = `${m === 1 ? y - 1 : y}-${pad(m === 1 ? 12 : m - 1)}`; nextA = `${m === 12 ? y + 1 : y}-${pad(m === 12 ? 1 : m + 1)}`; resetA = today.slice(0, 7);
   }
   const days = dates.length;
   const span = t1 - t0;
-  const rows = items.filter(it => it.start && it.end && it.kind !== '常驻' && bjMs(it.end) > t0 && bjMs(it.start) < t1)
-    .sort((a, b) => (newsOrder(a.game) - newsOrder(b.game)) || (bjMs(a.start) - bjMs(b.start)));
+  const rows = items.filter(it => it.start && it.end && it.kind !== '常驻' && bjMs(it.end) > t0 && newsStartMs(it) < t1)
+    .sort((a, b) => (newsOrder(a.game) - newsOrder(b.game)) || (newsStartMs(a) - newsStartMs(b)));
   const nowMs = nowBjMs();
   const pct = ms => Math.min(100, Math.max(0, (ms - t0) / span * 100));
   const hc = palName() === '高对比';
@@ -254,7 +266,7 @@ function ganttHtml(items, month, today) {
   }).join('');
   const nowIn = nowMs >= t0 && nowMs < t1;
   const rowHtml = it => {
-    const s = bjMs(it.start), e = bjMs(it.end); const c = newsColor(it.game); const fc = onColor(c);
+    const s = newsStartMs(it), e = bjMs(it.end); const c = newsColor(it.game); const fc = onColor(c);
     const l = pct(s), w = Math.max(pct(e) - l, 1.2);
     return `<div class="grow"><div class="glabel">${it.starred ? '<span class="star-on">★</span>' : ''}<span class="cat-dot" title="${esc(it.cat_label || '')}${it.tag && it.tag !== it.cat_label ? ' · ' + esc(it.tag) : ''}">${esc(it.tag || (it.cat_label || '').slice(0, 2))}</span></div>
       <div class="gtrack"><button type="button" class="gbar${it.forecast ? ' forecast' : s > nowMs ? ' upcoming' : ''}${s < t0 ? ' cut-l' : ''}${e > t1 ? ' cut-r' : ''}${e < nowMs ? ' past' : ''}${it.starred ? ' starred' : ''}" style="left:${l}%;width:${w}%;background:${c};color:${fc};--gc:${c}" aria-label="${esc(tn(it.title))}" data-act="news-open" data-id="${esc(it.id)}">
@@ -268,7 +280,7 @@ function ganttHtml(items, month, today) {
   const nav = view === 'week' ? 'news-week' : 'news-month';
   return `<section class="glass gantt">
     <div class="ph"><h3>${esc(title)}</h3>
-      <div class="side"><span class="small faint">按北京时间；鼠标移到色块上看题图和本地时间</span>
+      <div class="side"><span class="small faint">每格一个游戏日（北京 ${pad(Math.floor(off))}:${pad(Math.round(off * 60) % 60)} 起）；「更新后」开始的按各游戏的刷新时间；鼠标移到色块上看题图和本地时间</span>
         <div class="seg" role="group" aria-label="视图"><button type="button" class="${view === 'week' ? 'on' : ''}" data-act="news-view" data-v="week">本周</button><button type="button" class="${view === 'month' ? 'on' : ''}" data-act="news-view" data-v="month">本月</button></div>
         <button class="btn icon xs" data-act="${nav}" data-m="${prevA}" aria-label="${view === 'week' ? '上一周' : '上个月'}">${ICON.back}</button>
         <button class="btn xs" data-act="${nav}" data-m="${resetA}">${view === 'week' ? '回到本周' : '回到本月'}</button>

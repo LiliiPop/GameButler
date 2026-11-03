@@ -949,13 +949,14 @@ async function importFromTool() {
   } catch (e) { fail(e); }
 }
 
-// 今日任务：右键一个任务 →「跳过此次」（今天不再跑它；正在跑的就是它：马上停下，接着跑后面的）/「不跳过了」
+// 今日任务：右键一个任务 →「跳过此次」（今天不再跑它；正在跑的就是它：马上停下，接着跑后面的）/ 再跑一次 / 标为已完成
 document.addEventListener('contextmenu', e => {
   const row = e.target.closest?.('#rows .trow[data-tkey]'); if (!row || S.ed?.tab !== 'today') return;
   const k = row.dataset.tkey; const on = !S.ed.skipTasks?.has(k); const bad = BAD.has(S.ed.status?.[k]?.result);
   e.preventDefault(); closeCtx();
   const m = document.createElement('div'); m.className = 'ctx glass'; m.id = 'news-ctx';
-  m.innerHTML = `<div class="ctx-t">${esc(tn(k))}</div><button type="button" data-act="task-skip" data-key="${esc(k)}" data-on="${on ? 1 : 0}"><i>${on ? '⏭' : '↺'}</i>${on ? '跳过此次' : '不跳过了'}</button><button type="button" data-act="run-again" data-key="${esc(k)}" data-kind="now"><i>▶</i>再跑一次 · 立即开始</button><button type="button" data-act="run-again" data-key="${esc(k)}" data-kind="queue"><i>⤓</i>再跑一次 · 加入队列</button>${bad ? `<button type="button" data-act="mark-done" data-key="${esc(k)}"><i>✓</i>标为已完成</button>` : ''}`;
+  // 11-03：跳过了的任务不再给「不跳过了」（要跑就点「再跑一次」）；换成「标为已完成」——跳过的在日常一览里还算没做完
+  m.innerHTML = `<div class="ctx-t">${esc(tn(k))}</div>${on ? `<button type="button" data-act="task-skip" data-key="${esc(k)}" data-on="1"><i>⏭</i>跳过此次</button>` : ''}<button type="button" data-act="run-again" data-key="${esc(k)}" data-kind="now"><i>▶</i>再跑一次 · 立即开始</button><button type="button" data-act="run-again" data-key="${esc(k)}" data-kind="queue"><i>⤓</i>再跑一次 · 加入队列</button>${bad || !on ? `<button type="button" data-act="mark-done" data-key="${esc(k)}"><i>✓</i>标为已完成</button>` : ''}`;
   document.body.appendChild(m);
   const r = m.getBoundingClientRect();
   m.style.left = Math.min(e.clientX, innerWidth - r.width - 8) + 'px'; m.style.top = Math.min(e.clientY, innerHeight - r.height - 8) + 'px';

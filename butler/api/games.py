@@ -210,6 +210,13 @@ def _(api, m, q, b):
         raise ValueError("没选任务")
     from ..signals import clear_fuse
     clear_fuse(api.cfg, gid)  # 标成已完成 = 你处理过了：今天的熔断也解除（11-02）
+    from ..schedule import Schedule
+    from ..timeutil import sched_day
+    sch = Schedule(api.cfg)
+    skipped = set(sch.skip_tasks(sched_day(), gid))
+    for k in keys:  # 11-03：跳过了的任务标成已完成：不再显示「跳过」
+        if k in skipped:
+            sch.set_skip_task(sched_day(), gid, k, False)
     api.store.record(gid, day, [{"task": k, "result": "succeeded", "attempts": 0, "minutes": 0,
                                  "detail": "手动标记为已完成" + (f"（原来：{st[k].get('detail') or st[k]['result']}）"
                                                           if st.get(k) and st[k].get("result") not in DONE else "")}
