@@ -110,7 +110,7 @@ function itemRow(b, i, draggable = false) {
     b.rerun ? '今天做过的也再跑' : ''].filter(Boolean).join(' · ');
   const row = `<div class="bcard sch-item${b.state === 'attention' ? ' warm' : ''}${live ? ' live' : ''}${b.state === 'skipped' ? ' off' : ''}${draggable ? ' sortable' : ''}" data-i="${i}" data-id="${esc(b.id)}" style="--gc:${c}">
     <span class="bc-no"><span class="bgrip" aria-hidden="true">${draggable ? ICON.grip : ''}</span></span>
-    <span class="bc-name"><i class="b-bar"></i>${b.routine ? `<a href="#/g/${esc(b.game)}/routine" data-act="routine-open" data-gid="${esc(b.game)}" data-name="${esc(b.routine)}" draggable="false" title="去改这套任务预设">${esc(itemTitle(b))}</a>` : `<b>${esc(itemTitle(b))}</b>`}</span>
+    <span class="bc-name"><i class="b-bar"></i><a href="#/g/${esc(b.game)}/today" draggable="false" title="去改今天的任务：选项、跳过、再跑一次都只管今天（要以后都这样，去「任务预设」）">${esc(itemTitle(b))}</a></span>
     <span class="bc-when" title="${esc(src)}">${b.kind === 'rule' ? `<button type="button" class="linkbtn" data-act="rule-edit" data-id="${esc(b.id)}" title="改启动时间">${esc(when)}</button>` : esc(when)}</span>
     <div class="bc-st"><span class="pill ${cls}">${stText}</span>
       ${b.section === 'next' && b.eta_late ? '<div class="xsmall bwarn" title="按顺序和预计时长估的；赶时段的任务可能插队">可能赶不上它的时段</div>' : ''}${b.section === 'next' && !b.eta && b.eta_note ? `<div class="xsmall faint">${esc(b.eta_note)}</div>` : ''}

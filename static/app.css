@@ -946,7 +946,7 @@ a.b-row:hover .b-name b{text-decoration:underline;text-underline-offset:4px}
 .bc-st .pill{font-size:14px;white-space:normal;align-items:baseline}
 .bc-st .pill::before{align-self:center}
 .bc-st .bwarn{color:var(--orange-ink)}
-.bcard.off .bc-name b,.bcard.off .bc-when{text-decoration:line-through;color:var(--faint)}
+.bcard.off .bc-name b,.bcard.off .bc-name a,.bcard.off .bc-when{text-decoration:line-through;color:var(--faint)}
 .bcard.off{opacity:1}
 .bacts{gap:16px;flex-wrap:nowrap;align-items:center}
 .bacts .btn:not(.warn){height:auto;min-height:30px;padding:0 2px;border:0;background:none;font-size:13px;font-weight:500;text-decoration:underline;text-underline-offset:4px;text-decoration-color:var(--line2)}
