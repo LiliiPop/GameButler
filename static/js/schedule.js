@@ -257,7 +257,7 @@ function whenEditor(w, opts = {}) {  // 什么时候：时间段 / 闲时 / 刷�
   const k = w.kind || (opts.now ? 'queue' : 'at');
   const t = x => x ? bjToLocal(x) : '';
   return `<div class="be-start">
-    ${opts.now || opts.queue ? `<label class="rad"><input type="radio" name="we-kind" value="queue" ${k === 'queue' || k === 'now' ? 'checked' : ''}> <b>加入队列</b> <span class="xsmall faint">${opts.now ? '排在今天的队尾，前面的轮完才开始；选「以后也这样」= 每天都排进队列' : '每天排进队列：前面的都轮完就跑，一整天都可以'}</span></label>` : ''}
+    ${opts.now || opts.queue ? `<label class="rad"><input type="radio" name="we-kind" value="queue" ${k === 'queue' || k === 'now' ? 'checked' : ''}> <b>加入队列</b> <span class="xsmall faint">${opts.now ? '排在今天的队尾，前面的轮完才开始；里面只在某个时段跑的任务到了时段先跑，不等前面的。选「以后也这样」= 每天都排进队列' : '每天排进队列：前面的都轮完就跑；里面只在某个时段跑的任务（例如领体力 · 午间）到了时段先跑，不等前面的'}</span></label>` : ''}
     <label class="rad nowrap"><input type="radio" name="we-kind" value="at" ${k === 'at' ? 'checked' : ''}> <b>定时</b> <input class="inp xs num t-short" type="time" id="we-at" value="${t(w.at) || '06:00'}"> 到 <input class="inp xs num t-short" type="time" id="we-until" value="${t(w.until)}"> <span class="xsmall faint">本地时间；默认截止到日常刷新时间</span></label>
     <label class="rad"><input type="radio" name="we-kind" value="idle" ${k === 'idle' ? 'checked' : ''}> <b>闲时</b>
       <span class="xsmall faint">满足「什么算闲时」就跑 · 最早 <input class="inp xs num t-short" type="time" id="we-iat" value="${k === 'idle' ? t(w.at) : ''}"> 起</span></label>

@@ -252,7 +252,16 @@ class Scheduler:
                     r = {**r, "plan": None, "next": None}
                 alive = bool(r["plan"] and r["plan"].keys) or bool(r["next"])
                 if b["start"].get("queue") and ahead and alive:
-                    r = {**r, "plan": None, "why": "排队中：等前面的轮完"}
+                    # 11-03：「加入队列」本来要等前面的轮完；但里面只在某个时段跑、而且时段正开着的任务不等
+                    # （时绘「领体力 · 午间」12:00–15:00 排在闲时的日常后面，等日常跑完时段可能已经过了）——只先跑这几项，其余照旧排队
+                    urgent = self._open_window_items(b, r["plan"], now) if r["plan"] else []
+                    if urgent:
+                        r["plan"].items = [t for t in r["plan"].items if t["task"] == self.cfg["games"][b["game"]].get("recovery_task", "")
+                                           or t in urgent]
+                        r["plan"].keys = [k for k in r["plan"].keys if k in {self._key(t) for t in urgent}]
+                        r = {**r, "why": "到了它的运行时段：先跑这几项，不等前面的"}
+                    else:
+                        r = {**r, "plan": None, "why": "排队中：等前面的轮完"}
                 ahead = ahead or alive
                 if r["plan"] and r["plan"].keys and r["wait_idle"]:
                     ok, w, why = self.idle_ok(now)
@@ -343,6 +352,27 @@ class Scheduler:
                 except Exception:
                     continue
         return min(ends) if ends else None
+
+    @staticmethod
+    def _key(t: dict) -> str:
+        from .store import item_key
+        return item_key(t)
+
+    def _open_window_items(self, b: dict, plan, now: datetime) -> list:
+        """这一批要跑的任务里，「只在某个时段跑」而且时段现在正开着的。"""
+        from .planner import window_of
+        from .timeutil import window_instances
+        g = self.cfg["games"][b["game"]]
+        day = game_day(g, now)
+        out = []
+        for t in plan.items:
+            spec = window_of(g, t)
+            try:
+                if spec and any(a <= now < e for a, e in window_instances(g, day, spec)):
+                    out.append(t)
+            except Exception:
+                continue
+        return out
 
     def prioritize(self, ready: list, now: datetime) -> list:
         """几条同时能跑时谁先（11-01 定，默认就这样）：
