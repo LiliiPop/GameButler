@@ -52,6 +52,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # 管家文件�
 from butler.signals import parse as parse_signal  # noqa: E402
 
 
+LOOP_NODES = 8    # 原地打转：最近一段时间里来回的节点不超过这么多个
+LOOP_HITS = 40    # 并且其中一个做了这么多次（10 分钟 40 次 = 15 秒一圈）
+
+
 class Progress(ContextEventSink):
     """记录最近一次「有进展」的时间（识别命中或执行动作），以及脚本输出的 focus 提示。"""
 
@@ -62,6 +66,7 @@ class Progress(ContextEventSink):
         self.focus: list[str] = []
         self.hits: deque = deque(maxlen=400)  # (时间, 节点名)
         self.seen: set[str] = set()            # 本任务里识别命中/执行过的全部节点名（判断 Flag 用）
+        self.acts: deque = deque(maxlen=5000)  # (时间, 节点名)：动作做完的节点，判断「原地打转」用（11-04）
 
     def _touch(self, name, focus):
         self.last = time.monotonic()
@@ -86,6 +91,8 @@ class Progress(ContextEventSink):
 
     def on_node_action(self, context, noti_type, detail):
         self._touch(detail.name, getattr(detail, "focus", None))
+        if noti_type == NotificationType.Succeeded:
+            self.acts.append((time.monotonic(), detail.name))
         if noti_type == NotificationType.Succeeded and detail.name in self.key_nodes and self.on_key:
             threading.Timer(1.2, self.on_key, args=(detail.name,)).start()  # 等画面切过去再截
 
@@ -107,7 +114,26 @@ class Progress(ContextEventSink):
         self.last_node = ""
         self.focus = []
         self.hits.clear()
+        self.acts.clear()
         self.seen = set()
+
+    def looping(self, window_s: float) -> str:
+        """原地打转（11-04）：最近 window_s 秒里只在几个节点之间来回（≤ LOOP_NODES 个），其中一个做了 ≥ LOOP_HITS 次
+        （平均 15 秒以内就转一圈）。画面一直在变，看画面判不出卡住——代号鸢「心纸营建」进历险 → 关弹窗 → 返回 → 再进，
+        10 秒一圈转了 90 分钟。返回说明（空 = 没打转）。刷体力这类正常的重复一圈要一分钟以上，到不了这个次数。"""
+        now = time.monotonic()
+        if not self.acts or now - self.acts[0][0] < window_s:  # 这一项跑得还不够久（或刚重置）
+            return ""
+        recent = [n for t, n in self.acts if now - t <= window_s]
+        if not recent:
+            return ""
+        from collections import Counter
+        c = Counter(recent)
+        top, hits = c.most_common(1)[0]
+        still = any(n == top for t, n in self.acts if now - t <= 60)  # 现在还在转（最近一分钟里还做过它）
+        if still and len(c) <= LOOP_NODES and hits >= LOOP_HITS:
+            return f"{window_s / 60:g} 分钟里一直在重复同样几步（{'、'.join(n for n, _ in c.most_common(4))}），「{top}」做了 {hits} 次，没有进展"
+        return ""
 
     def looping(self, window_s: int) -> list[str] | None:
         """最近 window_s 秒里命中很多次、却只在 1–2 个节点之间打转 → 判为原地循环。"""
@@ -434,6 +460,13 @@ class Runner:
                 return "timeout", f"超过 {timeout_s / 60:g} 分钟未完成"
             if stall_s and now - last_look >= 15:  # 每 15 秒看一眼画面有没有变
                 last_look = now
+                loop = self.progress.looping(stall_s)
+                if loop:  # 画面在变，但脚本在几个节点之间原地打转：同样算卡住（11-04）
+                    shot = self.snapshot(entry)
+                    if shot:
+                        emit("info", msg=f"已截图：{shot}")
+                    self.stop()
+                    return "stalled", loop
                 cur = self.screen_sig()
                 if cur is not None:
                     if sig is None or cur.shape != sig.shape or float(abs(cur - sig).mean()) > 1.5:

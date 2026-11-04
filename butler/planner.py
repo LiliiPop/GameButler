@@ -66,7 +66,8 @@ def source(cfg: dict, store: Store, gid: str, day, routine: str, named: list[str
             raise ValueError(f"没有这套任务预设：{routine}")
         return _apply_day(cfg, gid, day, rs[routine]["tasks"])
     from .schedule import Schedule
-    today = Schedule(cfg).game_tasks(gid)
+    # 11-04：今天跳过的条目（「跳过当前序列」= 今天不再自动跑）也算：你手动点「开始 / 继续」时照样能跑它的任务
+    today = Schedule(cfg).game_tasks(gid, with_skipped=True)
     return _apply_day(cfg, gid, day, resolve_named(store, gid, named, today) if named else today)
 
 
