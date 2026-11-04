@@ -509,7 +509,8 @@ class MaaGame(ReservedGame):
         stall_skip = sset.get("stuck_action") == "skip"
         # 卡死处理（11-01 定，默认开）：看画面——10 分钟没有变化算卡住，重启游戏、按重试次数再跑。
         # 开着时不用每项的固定最长时间（11-01 代号鸢「地宫助手」次次被 15 分钟上限停掉），只留 90 分钟兜底。
-        # 关着时照旧按每项的最长时间。旧的「几分钟没有识别命中 / 在两个节点间打转」会误伤正常运转，不再用
+        # 关着时照旧按每项的最长时间。旧的「几分钟没有识别命中 / 在两个节点间打转」会误伤正常运转，不再用；
+        # 11-04 新加的「原地打转」（runner/maa_runner.py Progress.looping）条件严得多：10 分钟里 ≤ 8 个节点、其中一个 ≥ 40 次
         from . import settings as SET
         stuck_on = bool(SET.get(self.cfg, "scheduler").get("stuck_restart"))
         stuck_s = STUCK_MINUTES * 60 if stuck_on else 0

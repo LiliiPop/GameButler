@@ -25,6 +25,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from collections import Counter, deque
+
 from .bgilog import OneDragonLog
 from .runstate import NO_WINDOW, is_admin, kill_image, kill_tree
 from .store import item_key
@@ -108,6 +110,9 @@ def _read_json(path: Path) -> dict:
             return json.load(f)
     except (OSError, ValueError) as e:
         raise RuntimeError(f"BetterGI 的文件读不出来：{path}（{e}）") from e
+
+
+_LOG_HEAD = re.compile(r"^\[\d\d:\d\d:\d\d\.\d+\] \[\w+\] ")  # BetterGI 日志每条的头一行
 
 
 class LogTail:
@@ -705,16 +710,51 @@ class BetterGIGame:
         def finish_item(res, why):
             handle(log.close(res, why))
 
+        # 11-04：每一项的卡死判断（「卡死处理」开着时）：
+        # - 不出声：这一项开始后 BetterGI 日志 10 分钟没有一行新内容（「圣遗物实时评分」这种不会自己结束的脚本跑了 8 小时）
+        # - 原地打转：10 分钟里日志只是那几行在重复（数字不算，如坐标），其中一行出现了 ≥ 40 次，最近一分钟还在出
+        from . import settings as SET
+        stall_s = 600 if SET.get(self.cfg, "scheduler").get("stuck_restart") else 0
+        line_at = time.monotonic()
+        lines = deque(maxlen=5000)  # (时间, 去掉数字的日志内容)
+        stalled = ""
+
+        def looping(now):
+            if cur_t0 is None or now - cur_t0 < stall_s:
+                return ""
+            recent = [m for t, m in lines if now - t <= stall_s and t >= cur_t0]
+            if not recent:
+                return ""
+            c = Counter(recent)
+            top, hits = c.most_common(1)[0]
+            if "暂停" in top:  # 「当前获取焦点的窗口为: explorer，不是原神，暂停」：你切走了窗口，BetterGI 自己在等，不算卡住
+                return ""
+            if len(c) <= 8 and hits >= 40 and any(m == top and now - t <= 60 for t, m in lines):
+                return f"BetterGI 日志 {stall_s // 60} 分钟里只是这几行在重复（{'；'.join(m[:30] for m, _ in c.most_common(3))}），没有进展"
+            return ""
+
         while overall is None:
             time.sleep(3)
-            for s in tail.read():
+            got = tail.read()
+            if got:
+                line_at = time.monotonic()
+            for s in got:
+                t = s.strip()
+                if t and not _LOG_HEAD.match(t):  # 日志是「[时间] [级别] [..] 类名」一行 + 内容一行：只数内容
+                    lines.append((time.monotonic(), re.sub(r"\d+(\.\d+)?", "#", t)[:80]))
                 handle(log.feed(s))
                 if overall:
                     break
             if overall:
                 break
-            if ctx.stop_requested():
-                why = "已手动停止"
+            now = time.monotonic()
+            if stall_s and cur_t0 is not None and not ctx.rs.suspended():
+                if now - max(line_at, cur_t0) > stall_s:
+                    stalled = f"BetterGI 日志 {stall_s // 60} 分钟没有新内容（这一项一直没有输出，可能是不会自己结束的脚本，或卡住了）"
+                else:
+                    stalled = looping(now)
+            if stalled or ctx.stop_requested():
+                why = "已手动停止" if not stalled else stalled
                 try:  # 先让 BetterGI 自己取消任务（暂停中也一样），等它在日志里确认
                     self.press("cancel")
                     t_c = time.monotonic()
@@ -726,6 +766,10 @@ class BetterGIGame:
                 except Exception as e:
                     ctx.emit("warn", msg=f"没能让 BetterGI 自己取消任务，直接结束：{e}")
                 ctx.rs.set_suspended(None)
+                if stalled:  # 卡住的这一项记「卡住」（算失败，按重试规则再跑）；后面没轮到的照常记「未运行」，之后再跑
+                    finish_item("stalled", stalled)
+                    overall, overall_why = "stalled", stalled
+                    break
                 finish_item("stopped", why)
                 overall, overall_why = "stopped", why
                 break
@@ -744,7 +788,7 @@ class BetterGIGame:
                 finish_item("failed", "BetterGI 退出了，日志里没有结束标志")
                 overall, overall_why = "failed", "BetterGI 退出了，日志里没有结束标志"
 
-        if overall in ("timeout", "stopped"):
+        if overall in ("timeout", "stopped", "stalled"):
             if proc is not None and proc.poll() is None:
                 kill_tree(proc.pid)
             for exe in [exe_name] + list(g.get("processes", [])):
@@ -755,7 +799,8 @@ class BetterGIGame:
             if k not in results:
                 # 没轮到的项不算失败：记「未运行」（stopped 不写进当天状态，界面显示未运行，之后照常再跑）
                 why = {"stopped": "未运行（已手动停止）", "cancelled": "未运行（一条龙在 BetterGI 里被中断）",
-                       "timeout": "未运行（一条龙超时）"}.get(overall, "未运行（一条龙中途结束）")
+                       "timeout": "未运行（一条龙超时）",
+                       "stalled": "未运行（前面一项卡住，一条龙停下了）"}.get(overall, "未运行（一条龙中途结束）")
                 res = "stopped"
                 ctx.emit("task_end", task=k, attempt=1, result=res, detail=why, minutes=0, focus=[], flags=[], shots=[])
                 results[k] = {"task": k, "attempt": 1, "attempts": 1, "result": res, "detail": why, "minutes": 0,
