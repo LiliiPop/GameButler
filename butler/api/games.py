@@ -192,9 +192,13 @@ def _(api, m, q, b):
     items = [{"id": x["id"], "kind": x["kind"], "routine": x.get("routine", ""), "tasks": x.get("tasks", []),
               "when": x["when"], "skipped": x["id"] in doc["skip"], "ran": doc["ran"].get(x["id"], "")}
              for x in doc["batches"] if x["game"] == gid]
-    return {"day": game_day(g).isoformat(), "tasks": sch.game_tasks(gid), "status": api.store.status(gid, game_day(g)),
+    # 11-04：今天跳过的条目（「跳过当前序列」）里的任务也列出来，标成「今天跳过」；不然列表是空的，同步、改选项都找不到它们
+    alive = {item_key(t) for t in sch.game_tasks(gid)}
+    tasks = sch.game_tasks(gid, with_skipped=True)
+    return {"day": game_day(g).isoformat(), "tasks": tasks, "status": api.store.status(gid, game_day(g)),
             "items": items, "today_choices": sch.day_choices(sched_day(), gid),
-            "skip_tasks": sch.skip_tasks(sched_day(), gid)}
+            "skip_tasks": sch.skip_tasks(sched_day(), gid),
+            "batch_skipped": [item_key(t) for t in tasks if item_key(t) not in alive]}
 
 
 @route("POST", r"/api/today/(\w+)/mark-done")
@@ -254,7 +258,7 @@ def _(api, m, q, b):
     api.game(gid)
     sch = Schedule(api.cfg)
     patch = b.get("choices") or {}
-    known = {item_key(t): t for t in sch.game_tasks(gid)}
+    known = {item_key(t): t for t in sch.game_tasks(gid, with_skipped=True)}
     bad = [k for k in patch if k not in known]
     if bad:
         raise ValueError("今天没有这些任务：" + "、".join(bad))
@@ -315,9 +319,13 @@ def _(api, m, q, b):
     pre = set(getattr(ad, "pre_tasks", dict)() or {})
     rec = g.get("recovery_task", "")
     sch, day = Schedule(api.cfg), sched_day()
+    doc = sch.day(day)
+    for x in doc["batches"]:  # 上次同步加的、还没开始跑的：先去掉，下面按工具现在的设置重新算（不重复加）
+        if x["game"] == gid and x["kind"] == "once" and x.get("label") == SYNC_LABEL and x["id"] not in doc["ran"]:
+            sch.remove_once(day, x["id"])
     skip = set(sch.skip_tasks(day, gid))
     patch, now_skip, now_run, have = {}, [], [], set()
-    for t in sch.game_tasks(gid):
+    for t in sch.game_tasks(gid, with_skipped=True):
         k = item_key(t)
         have.add(t["task"])
         if t["task"] == rec or t["task"] in pre:
@@ -336,15 +344,47 @@ def _(api, m, q, b):
         ad.mark_synced()
     from ..bettergi import FINISH
     missing = [n for n in names if n not in have and n not in pre and n != FINISH]
+    added = _today_extra(api, gid, missing)
     api.sched.wake()
     parts = [f"{len(patch)} 项的选项今天跟 BetterGI"]
     if now_skip:
         parts.append(f"今天跳过（BetterGI 没启用）：{'、'.join(now_skip)}")
     if now_run:
         parts.append(f"不再跳过：{'、'.join(now_run)}")
-    if missing:
-        parts.append(f"BetterGI 还启用了 {'、'.join(missing)}，今天的任务里没有（要跑就点「添加任务」）")
-    return {"ok": True, "msg": "；".join(parts), "skipped": now_skip, "missing": missing}
+    if added:
+        parts.append(f"加进今天：{'、'.join(missing)}（{added}）")
+    return {"ok": True, "msg": "；".join(parts), "skipped": now_skip, "added": missing}
+
+
+SYNC_LABEL = "从 BetterGI 同步（仅今日）"
+
+
+def _today_extra(api, gid: str, keys: list[str]) -> str:
+    """「从 BetterGI 同步（仅今日）」：工具里启用了、今天各条里没有的任务，加一条今天的一次性条目（11-04）。
+    跟这个游戏今天定时那条同样的开始条件（例如闲时），排在它后面；没有定时就加入队列。再同步一次换掉上次加的那条，不重复加。
+    返回说明（空 = 没加）。"""
+    from ..schedule import Schedule
+    from ..timeutil import sched_day
+    sch, day = Schedule(api.cfg), sched_day()
+    if not keys:
+        return ""
+    doc = sch.day(day)
+    rule = next((x for x in doc["batches"] if x["game"] == gid and x["kind"] == "rule"), None)
+    w = dict(rule["when"]) if rule else {"kind": "queue"}
+    if w.get("kind") not in ("queue", "at", "idle"):
+        w = {"kind": "queue"}  # 「刷新后马上」一次性条目没有：按加入队列
+    try:
+        b = sch.add_once(day, {"game": gid, "tasks": keys, "when": w, "label": SYNC_LABEL})
+    except ValueError:  # 例如还没设置什么算闲时：按加入队列
+        w = {"kind": "queue"}
+        b = sch.add_once(day, {"game": gid, "tasks": keys, "when": w, "label": SYNC_LABEL})
+    ids = [y["id"] for y in sch.day(day)["batches"]]
+    if rule and rule["id"] in ids:  # 排在定时那条后面
+        rest = [i for i in ids if i != b["id"]]
+        k = rest.index(rule["id"]) + 1
+        sch.set_order(day, rest[:k] + [b["id"]] + rest[k:])
+    from ..schedule import when_text
+    return f"今天{'跟定时一起' if rule else '加入队列'}跑：{when_text(w, api.game(gid))}"
 
 
 @route("PUT", r"/api/bettergi/(\w+)/group")

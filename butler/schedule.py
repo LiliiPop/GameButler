@@ -348,6 +348,10 @@ class Schedule:
     def set_skip(self, day: date, bid: str, on: bool):
         def fn(d):
             d["skip"] = [i for i in d.get("skip", []) if i != bid] + ([bid] if on else [])
+            if on:  # 11-04：跳过了的条目，之前「挪到现在」排着的那一轮也作废（不然下次挪回来会把旧的整套任务并进去）
+                (d.get("requeue") or {}).pop(bid, None)
+                d["requeue_q"] = [i for i in d.get("requeue_q", []) if i != bid]
+                d["requeue_rerun"] = [i for i in d.get("requeue_rerun", []) if i != bid]
         jsonio.update(self.day_path(day), {}, fn)
 
     def requeue(self, day: date, bid: str, keys: list[str], queue: bool = False, rerun: bool = False):

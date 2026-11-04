@@ -116,7 +116,8 @@ class Api:
             if x["id"] == cur:
                 left += ks  # 要「再跑一次」正在跑的那条里的任务：另加一条
                 continue
-            prev = list(x.get("tasks") or []) if x.get("requeue") else []
+            # 已经挪过、还没开始的才并进去；跳过了的条目上留着的是作废的那一轮（11-04：原神并进了整套一条龙）
+            prev = list(x.get("tasks") or []) if x.get("requeue") and x["id"] not in doc["skip"] else []
             sch.requeue(day, x["id"], prev + [k for k in ks if k not in prev], queue=kind == "queue", rerun=rerun)
             hit.append(x["id"])
         if not hit:

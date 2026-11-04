@@ -64,7 +64,7 @@ async function loadEditor(gid, tab) {
   } else {  // 今天：只看——今天各条里的任务和状态（改跑什么去任务预设，改什么时候去日程）
     ed.day = g.today;
     const r = await api('GET', `/api/today/${encodeURIComponent(gid)}`);
-    ed.tasks = r.tasks || []; ed.status = r.status || {}; ed.items = r.items || []; ed.todayChoices = r.today_choices || {}; ed.skipTasks = new Set(r.skip_tasks || []);
+    ed.tasks = r.tasks || []; ed.status = r.status || {}; ed.items = r.items || []; ed.todayChoices = r.today_choices || {}; ed.skipTasks = new Set(r.skip_tasks || []); ed.batchSkipped = new Set(r.batch_skipped || []);
   }
   ed.saved = JSON.stringify(ed.tasks);
   S.ed = ed; setDirty(false);
@@ -181,7 +181,7 @@ function todayInner() {
   const rows = ed.tasks.map((t, i) => {
     const k = keyOf(t); const st = ed.status[k]; const off = disabledReason(t.task); const win = winOf(g, t);
     const live = R?.running && R.current?.game === ed.gid && (R.current.task === k || R.current.task === t.task);
-    const sk = ed.skipTasks?.has(k);
+    const sk = ed.skipTasks?.has(k) || ed.batchSkipped?.has(k);  // 11-04：整条今天跳过（跳过当前序列）的也算
     const b = live ? `<span class="badge run"><span class="dot live" style="width:6px;height:6px"></span>运行中</span>` : sk && !DONE.has(st?.result) ? '<span class="badge off">今天跳过</span>' : st ? badge(st.result) : off ? '<span class="badge off">停用</span>' : win && !inWindow(win) ? '<span class="badge off">等时段</span>' : '<span class="badge off">未运行</span>';
     const td = taskDef(t.task); const open = ed.open.has(i); const can = td && td.options.length;  // 11-03：原神（BetterGI）也能在今日任务里改选项
     return `<div class="trow${off || sk ? ' off' : ''}${live ? ' cur' : ''}${open ? ' open' : ''}"${can ? ` data-i="${i}"` : ''} data-tkey="${esc(k)}"><div class="thead"${can ? ` data-act="toggle" data-i="${i}"` : ''}><span class="tname"><b>${esc(tn(k))}</b>${ed.todayChoices?.[k] ? '<span class="chip">仅今日</span>' : ''}${st?.detail && BAD.has(st.result) ? `<span class="sum">${esc(why(st.detail))}</span>` : st?.time ? `<span class="sum num">${esc(st.time)}</span>` : ''}</span>
