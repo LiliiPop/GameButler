@@ -83,6 +83,7 @@ async function renderNews() {
       <div class="side">
         <div class="chips">${gids.filter(g => !N.off.has(g)).map(g => `<button type="button" class="gchip${N.focus === g ? ' on' : ''}" data-act="news-focus" data-gid="${esc(g)}" aria-pressed="${N.focus === g}" title="${N.focus === g ? '再点一下看全部游戏' : '轮播只看这个游戏的活动'}"><i style="background:${newsColor(g)}"></i>${esc(shortName(g))}</button>`).join('')}</div>
         <button class="btn sm" data-act="news-filter">筛选与关注</button>
+        ${(() => { const n = hiddenNews(d); return n.total ? `<button class="btn sm ghost" data-act="news-hidden" title="恢复显示隐藏了的活动和类别">已隐藏 ${n.total} 个</button>` : ''; })()}
         <div class="news-q${N.qOpen || N.q ? ' open' : ''}"><button class="btn icon sm" data-act="news-search" aria-label="搜索活动">${ICON.search}</button><input type="search" id="news-q" value="${esc(N.q || '')}" aria-label="搜索活动"></div>
       </div>
     </section>
@@ -107,17 +108,24 @@ const SRC_TYPE = { mihoyo_ann: '游戏内公告', mys_news: '米游社官方', h
 function newsBanners(d, focus = null) {
   const N = newsUiInit(); const nowMs = nowBjMs();
   const longTerm = it => it.start && it.end && bjMs(it.end) - bjMs(it.start) > 60 * 864e5;
-  // 11-03：只放已经开始、还没结束的（以前只看没结束，还没开始的预告也被当成「当前活动」；它们在日历里是虚线框）
-  const live = it => (!it.end || bjMs(it.end) >= nowMs) && (!it.start || it.start_note === '最早读到' || newsStartMs(it) <= nowMs);
+  // 11-05：还没开始的预告也放进轮播（标「预告」），排在进行中的后面；进行中的按结束早的先，预告按开始早的先
+  const live = it => !it.end || bjMs(it.end) >= nowMs;
   const fresh = it => it.end || (it.start && nowMs - bjMs(it.start) < 14 * 864e5);
   const list = (d.items || []).filter(it => !N.off.has(it.game) && !longTerm(it) && !it.hidden && it.img && live(it) && fresh(it) && it.kind !== '常驻' && (it.kind !== '公告' || it.end) && (!focus || it.game === focus))
-    .sort((a, b) => (bjMs(a.end) || 9e15) - (bjMs(b.end) || 9e15))
+    .sort((a, b) => (upcoming(a) - upcoming(b)) || (upcoming(a) ? newsStartMs(a) - newsStartMs(b) : (bjMs(a.end) || 9e15) - (bjMs(b.end) || 9e15)))
     .reduce((by, it) => { (by[it.game] = by[it.game] || []).push(it); return by; }, {})
     , out = [];
   // 11-02：各游戏轮流取（以前按结束时间取前 12 张，原神一个游戏就占满了）；每轮每个游戏一张，最多 16 张
   const queues = Object.values(list);
   for (let k = 0; out.length < 16 && queues.some(q => q.length > k); k++) queues.forEach(q => { if (q[k] && out.length < 16) out.push(q[k]); });
   return out;
+}
+// 还没开始的预告（「最早读到」的不知道开始时间，当已开始）
+const upcoming = it => !!it.start && it.start_note !== '最早读到' && newsStartMs(it) > nowBjMs();
+function startsInText(it) {  // 按北京时间的日历天数算（后天 04:00 开始 = 「后天开始」，不是「1 天后」）
+  const day = ms => Math.floor((ms + 8 * 36e5) / 864e5);
+  const days = day(newsStartMs(it)) - day(nowBjMs());
+  return days <= 0 ? '今天开始' : days === 1 ? '明天开始' : days === 2 ? '后天开始' : `${days} 天后开始`;
 }
 // 一个活动的图（11-02：同一个活动有多张图时都下了；按住左右拖动看这个活动的其他图）
 const bannerImgs = it => (it.imgs?.length ? it.imgs : [it.img]).filter(Boolean);
@@ -136,9 +144,10 @@ function bannerHtml(list, i, home = false) {
     ${n > 1 ? `<div class="bcount num" aria-label="第 ${k + 1} 张图，共 ${n} 张">${k + 1} / ${n}</div>` : ''}
     <div class="bshade"></div>
     <div class="btext">
-      <span class="gtag" style="background:${c};color:${onColor(c)}">${esc(shortName(it.game))}</span>
+      <span class="gtag" style="background:${c};color:${onColor(c)}">${esc(shortName(it.game))}</span>${upcoming(it) ? '<span class="gtag pre">预告</span>' : ''}
       <h2>${it.starred ? '<span class="star-on" title="已关注">★</span> ' : ''}${esc(tn(it.title))}</h2>
-      <div class="small">${it.end ? `${esc(leftText(it.end))} · 结束 ${esc(bothTimes(it.end))}` : it.start ? `${it.kind === '外观' ? '上新' : '发布'} ${esc(bothTimes(it.start))}` : ''}</div>
+      <div class="small">${upcoming(it) ? `${esc(startsInText(it))} · 开始 ${esc(bothTimes(new Date(newsStartMs(it) + 8 * 36e5).toISOString().slice(0, 16).replace('T', ' ')))}${it.start_note ? '（' + esc(it.start_note) + '）' : ''}`
+        : it.end ? `${esc(leftText(it.end))} · 结束 ${esc(bothTimes(it.end))}` : it.start ? `${it.kind === '外观' ? '上新' : '发布'} ${esc(bothTimes(it.start))}` : ''}</div>
     </div>
     ${list.length > 1 ? `<button class="bnav prev" data-act="news-slide" data-d="-1" aria-label="上一张">${ICON.back}</button><button class="bnav next" data-act="news-slide" data-d="1" aria-label="下一张">${ICON.right}</button>
     <div class="bdots">${list.map((x, k) => `<button class="${k === i ? 'on' : ''}" data-act="news-dot" data-k="${k}" aria-label="第 ${k + 1} 张"></button>`).join('')}</div>` : ''}
@@ -397,12 +406,47 @@ function newsActsHtml(it) {
         : `<button class="btn sm" data-act="nd" data-a="hide" data-id="${esc(it.id)}">⊘ 隐藏这个活动</button>`}
       <button class="btn sm" data-act="nd" data-a="hide_cat" data-id="${esc(it.id)}" data-game="${esc(it.game)}" data-cat="${esc(it.cat)}">⊖ ${esc(catHideText(it))}</button>`;
 }
+// 11-05：隐藏了的活动 / 类别（活动页「已隐藏 N 个」打开，一个个恢复或全部恢复）
+function hiddenNews(d) {
+  const p = d?.prefs || {}; const now = nowBjMs();
+  const items = (d?.items || []).filter(it => (p.hidden_items || []).includes(it.id) && (!it.end || bjMs(it.end) >= now));
+  const label = id => (d.cats || []).find(c => c.id === id)?.label || id;
+  const cats = Object.entries(p.hidden_cats || {}).flatMap(([g, ids]) => (ids || []).map(c => ({ game: g, cat: c, label: label(c) })));
+  return { items, cats, total: items.length + cats.length };
+}
+function hiddenNewsHtml() {
+  const h = hiddenNews(S.news || {});
+  if (!h.total) return '<div class="small faint">没有隐藏的活动了。</div>';
+  return `<div class="nf">
+    ${h.items.length ? `<h4>隐藏的活动（${h.items.length}）</h4>${h.items.map(it => `<div class="tp-row"><span class="nr-g">${esc(shortName(it.game))}</span><span>${esc(tn(it.title))}</span><span class="xsmall faint">${it.end ? esc(leftText(it.end)) : ''}</span><span style="flex:1"></span><button class="btn xs" data-act="nd" data-a="unhide" data-id="${esc(it.id)}">恢复显示</button></div>`).join('')}` : ''}
+    ${h.cats.length ? `<h4>隐藏的类别（${h.cats.length}）</h4><div class="small faint">这些类别的活动都不显示。</div>${h.cats.map(c => `<div class="tp-row"><span class="nr-g">${c.game === '*' ? '全部游戏' : esc(shortName(c.game))}</span><span>${esc(c.label)}</span><span style="flex:1"></span><button class="btn xs" data-act="nd" data-a="unhide_cat" data-game="${esc(c.game)}" data-cat="${esc(c.cat)}">恢复显示</button></div>`).join('')}` : ''}
+    ${h.total > 1 ? `<div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn sm" data-act="news-unhide-all">全部恢复</button></div>` : ''}
+  </div>`;
+}
+function openHiddenNews() {
+  modal({ title: '已隐藏的活动', wide: true, ok: '完成', cancel: '', body: `<div id="nh-body">${hiddenNewsHtml()}</div>` });
+}
+async function unhideAllNews() {
+  const h = hiddenNews(S.news || {});
+  try {
+    for (const it of h.items) await api('POST', '/api/news/act', { act: 'unhide', id: it.id });
+    for (const c of h.cats) await api('POST', '/api/news/act', { act: 'unhide_cat', game: c.game, cat: c.cat });
+  } catch (e) { fail(e); }
+  await newsAct(null); toast('都恢复显示了');
+}
 async function newsAct(body, refreshId) {
-  try { await api('POST', '/api/news/act', body); } catch (e) { fail(e); return; }
+  if (body) {
+    try { await api('POST', '/api/news/act', body); } catch (e) { fail(e); return; }
+    if (body.act === 'hide' || body.act === 'hide_cat') {  // 隐藏后给个「撤销」，不用再去找入口
+      const undo = { ...body, act: body.act === 'hide' ? 'unhide' : 'unhide_cat' };
+      toast(body.act === 'hide' ? '已隐藏这个活动' : '已隐藏这一类活动', false, { label: '撤销', fn: () => newsAct(undo, refreshId) });
+    }
+  }
   try { S.news = await api('GET', '/api/news'); } catch (e) { failRead('活动')(e); return; }
   if (refreshId) { const it = S.news.items.find(x => x.id === refreshId); const box = $('#nd-body'); if (it && box) { box.innerHTML = newsDetailHtml(it, S.newsContent || ''); const ab = $('#nd-acts'); if (ab) ab.innerHTML = newsActsHtml(it); } }
   if (S.route.view === 'news') renderNews(); else if (S.route.view === 'home') renderHome();
   if ($('#nf-body')) $('#nf-body').innerHTML = newsFilterHtml();
+  if ($('#nh-body')) $('#nh-body').innerHTML = hiddenNewsHtml();
 }
 // 搜索：标题、副标题、原文标题、角色；范围 = 进行中 + 前后 30 天
 function newsSearchHtml(all, q) {
@@ -462,7 +506,7 @@ function newsFilterHtml() {
     ${gids.map(g => { const names = (d.chars || {})[g] || []; const tr = (p.track || {})[g] || []; return `<div class="nf-g"><b><i style="background:${newsColor(g)}"></i>${esc(shortName(g))}</b><div class="nf-cats">
       ${names.map(n => `<button type="button" class="nf-cat chr${tr.includes(n) ? ' on' : ''}" data-act="nf-track" data-game="${esc(g)}" data-name="${esc(n)}" data-on="${tr.includes(n) ? '1' : '0'}">${tr.includes(n) ? '★ ' : ''}${esc(n)}</button>`).join('')}
       <input class="inp xs" placeholder="添加角色名" data-act="nf-addchar" data-game="${esc(g)}" style="width:110px"></div></div>`; }).join('')}
-    <h4>不再关注的活动（${hiddenItems.length}）</h4>
+    <h4>隐藏的活动（${hiddenItems.length}）</h4>
     ${hiddenItems.map(it => `<div class="tp-row"><span class="nr-g">${esc(shortName(it.game))}</span><span>${esc(tn(it.title))}</span><span style="flex:1"></span><button class="btn xs" data-act="nd" data-a="unhide" data-id="${esc(it.id)}">恢复</button></div>`).join('') || '<div class="small faint">没有</div>'}
   </div>`;
 }

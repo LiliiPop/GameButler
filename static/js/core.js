@@ -125,10 +125,14 @@ const game = gid => allGames().find(g => g.id === gid);
 const nowBjMs = () => Date.now() + S.bjOffset;
 
 // ------------------------------------------------------------------ 提示与弹窗
-function toast(text, err = false) {
+function toast(text, err = false, act = null) {  // act = {label, fn}：提示里带一个按钮（例如「撤销」，11-05）
   const box = $('#toast'); const d = document.createElement('div');
   d.textContent = text; if (err) d.className = 'err';
-  box.appendChild(d); setTimeout(() => d.remove(), err ? 6000 : 3200);
+  if (act) {
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'toast-act'; btn.textContent = act.label;
+    btn.onclick = () => { d.remove(); act.fn(); }; d.appendChild(btn);
+  }
+  box.appendChild(d); setTimeout(() => d.remove(), err ? 6000 : act ? 8000 : 3200);
 }
 const fail = e => toast(e.message || String(e), true);
 const failRead = what => e => toast(`读不到${what}：${e.message || e}`, true); // 界面读数据失败：说出来，不当成没有数据

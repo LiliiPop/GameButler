@@ -98,6 +98,8 @@ document.addEventListener('click', async e => {
     case 'nd': newsAct({ act: el.dataset.a, id: el.dataset.id, game: el.dataset.game, cat: el.dataset.cat, ...(el.dataset.v !== undefined ? { value: el.dataset.v } : {}) }, $('#nd-body') ? el.dataset.id : null);
       if (el.dataset.a === 'pin_img') { const N = S.newsUi; if (N?.imgIdx) delete N.imgIdx[el.dataset.id]; toast(el.dataset.v ? '已固定为这个活动的题图' : '已恢复自动挑题图'); } break;
     case 'news-filter': openNewsFilter(); break;
+    case 'news-hidden': openHiddenNews(); break;
+    case 'news-unhide-all': unhideAllNews(); break;
     case 'edit-group': if (S.ed) editGroup(S.ed.gid, el.dataset.task); break;
     case 'tool-browse': case 'tool-scan': case 'tool-check': case 'tool-mumu': case 'tool-emu-close': toolAct(act, el); break;
     case 'setup-done': location.hash = '#/'; break;
