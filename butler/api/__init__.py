@@ -66,8 +66,9 @@ class Api:
         if when.get("kind") in ("now", "queue"):
             g = self.game(body["game"])
             p = P.plan(self.cfg, self.store, body["game"], body.get("tasks") or None, manual=True,
-                       rerun=bool(body.get("rerun")), now=datetime.now(BJ), routine=str(body.get("routine") or ""))
-            if not p.keys:
+                       rerun=bool(body.get("rerun")), now=datetime.now(BJ), routine=str(body.get("routine") or ""),
+                       wait=when.get("kind") == "queue")
+            if not p.keys and not (when.get("kind") == "queue" and p.next):  # 加入队列、等今天的时段开：照样排上（11-06）
                 raise ValueError(f"{g['name']}：没有要跑的。{p.why}")
         from ..signals import clear_fuse
         # 中止队列以后你点「开始 / 立即开始 / 继续」：恢复调度；「加入队列」只排着，不恢复（11-02）。让出电脑都不恢复
@@ -81,7 +82,7 @@ class Api:
         if when.get("kind") in ("now", "queue") and not body.get("hires") and not body.get("routine"):
             # 11-03：「开始」「立即开始」「继续」不再复制一条「今天的任务」——把今天日程里本来就有这些任务的条目挪到现在（或队尾）；
             # 只有哪条都不包含的任务才另加一条
-            moved, left = self._move_rules(day, body, p.keys)
+            moved, left = self._move_rules(day, body, p.keys or list(body.get("tasks") or []))  # 等时段的：按你点的任务挪
             if moved and not left:
                 self.sched.wake()
                 return {**moved, "merged": True, "paused": bool(self.rs.paused())}

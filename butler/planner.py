@@ -85,7 +85,9 @@ def _apply_day(cfg: dict, gid: str, day, tasks: list[dict]) -> list[dict]:
 
 
 def plan(cfg: dict, store: Store, gid: str, named: list[str] | None, *, manual: bool, rerun: bool = False,
-         now: datetime, routine: str = "") -> Plan:
+         now: datetime, routine: str = "", wait: bool = False) -> Plan:
+    """wait（11-06）：手动排的「加入队列」——不在运行时段的任务不跳过，等今天的时段开了再跑（同自动）；
+    「立即开始」（wait=False）照旧：不在时段就跳过并说明。"""
     g = cfg["games"][gid]
     ad = G.adapter(cfg, gid)
     day = game_day(g, now)
@@ -151,8 +153,10 @@ def plan(cfg: dict, store: Store, gid: str, named: list[str] | None, *, manual: 
         if spec:
             wins = window_instances(g, day, spec)
             if not any(a <= now < b for a, b in wins):
-                if manual:
-                    out.skipped.append(f"任务 {k} 的运行时段是 {window_text(spec)}，已跳过")
+                later_today = [a for a, _ in wins if a > now]
+                if manual and not (wait and later_today):
+                    out.skipped.append(f"任务 {k} 的运行时段是 {window_text(spec)}，已跳过"
+                                       + ("（要等时段开了再跑，用「加入队列」）" if later_today else ""))
                 else:
                     later = [a for a, _ in wins if a > now]
                     if later:
@@ -190,7 +194,7 @@ def plan(cfg: dict, store: Store, gid: str, named: list[str] | None, *, manual: 
     out.items = R.strip(items)
     out.next = min(nexts) if nexts else None
     if not out.keys:
-        out.why = "；".join(out.skipped) or ("今天需要跑的都已完成" + ("，还有任务没到时间" if nexts else ""))
+        out.why = "；".join(out.skipped) or (f"等时间到：{min(nexts):%H:%M} 开始（北京时间）" if nexts else "今天需要跑的都已完成")
     return out
 
 

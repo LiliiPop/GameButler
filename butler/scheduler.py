@@ -192,7 +192,7 @@ class Scheduler:
                 until = datetime.strptime(gs["postponed_until"], "%Y-%m-%d %H:%M").replace(tzinfo=BJ)
                 return {**row, "why": f"推迟到 {gs['postponed_until'][11:]}", "next": until}
         p = P.plan(self.cfg, self.store, gid, b["tasks"] or None, manual=manual, rerun=bool(b.get("rerun")), now=now,
-                   routine=b.get("routine", ""))
+                   routine=b.get("routine", ""), wait=bool(b["start"].get("queue")))
         row.update(plan=p, next=p.next)
         if not p.keys:
             return {**row, "why": p.why}
@@ -245,7 +245,8 @@ class Scheduler:
                 except Exception as e:  # 一个批次算不出来不影响别的批次：原因显示在这个批次上
                     r = {"plan": None, "why": f"出错：{type(e).__name__}: {e}", "next": None, "wait_idle": False}
                     self.log(f"批次出错：{type(e).__name__}: {e}", b["game"])
-                if b["start"]["mode"] == "now" and r["plan"] and not r["plan"].keys and b["id"] not in doc["ran"]:
+                if b["start"]["mode"] == "now" and r["plan"] and not r["plan"].keys and not r["plan"].next and b["id"] not in doc["ran"]:
+                    # （11-06：还在等今天的运行时段开的「加入队列」不算用掉）
                     # 「立即」批次到开始时已经没有要跑的：这一批就算用掉了，原因记在批次上
                     Schedule(self.cfg).mark_ran(sched_day(now), b["id"], r["why"])
                     self.log(f"没有要跑的：{r['why']}", b["game"])
