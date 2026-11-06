@@ -43,6 +43,8 @@ def schedule_view(api, day) -> dict:
         r = info.get(b["id"], {})
         if b.get("requeue"):  # 刚放回「接下来」的：调度上次算的结果（这一轮跑完了）不再算数
             r = {**r, "final": False}
+        # 11-06（批注 #204）：自动补跑次数用尽的（可能是预设外顺带跑的，例如读抽卡资源）也算没做成，不显示「完成」
+        bad = bad + [k for k in (r.get("capped") or []) if k not in bad and st.get(k, {}).get("result") not in DONE]
         fz = fused(cfg, b["game"], gday)
         ran = doc["ran"].get(b["id"], "")
         running = b["id"] == cur_batch if cur_batch else cur_game == b["game"]

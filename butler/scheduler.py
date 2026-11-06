@@ -200,10 +200,16 @@ class Scheduler:
             sset = S.get(self.cfg, "scheduler")
             gs = self.game_state(gid)
             maxn = 1 + int(sset["fail_retries"])
-            keys = [k for k in p.keys if gs["attempts"].get(k, 0) < maxn]
+            # 11-06：attempts 只算「跑了、而且没做成」的次数（被停止 / 让出 / 没轮到的，跑完时退回，见 start 里的 waiter）
+            from .store import DONE
+            stn = self.store.status(gid, day)
+            capped = [k for k in p.keys if gs["attempts"].get(k, 0) >= maxn and stn.get(k, {}).get("result") not in DONE]
+            keys = [k for k in p.keys if k not in capped]
+            row["capped"] = capped
             if not keys:
-                return {**row, "plan": None, "final": True, "why": "今天这一轮跑完了，没做成的等你处理（调度设置里可以设「失败后自动补跑」）"
-                        if maxn == 1 else f"没做成的已自动重试到上限（共试了 {maxn} 次都没成），不再自动跑；没有算成完成，等你处理：右键可重跑或标为已完成"}
+                names = "、".join(capped[:4]) + (f" 等 {len(capped)} 项" if len(capped) > 4 else "")
+                return {**row, "plan": None, "final": True, "why": f"{names} 没做成，今天不再自动重试（调度设置里可以设「失败后自动补跑」）"
+                        if maxn == 1 else f"{names} 已自动试了 {maxn} 次都没做成，今天不再自动跑：右键重跑，或标为已完成"}
             if gs["last_run"] and any(gs["attempts"].get(k) for k in keys):
                 last = datetime.strptime(gs["last_run"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=BJ)
                 gap = timedelta(minutes=int(sset["retry_gap_minutes"]))
@@ -280,7 +286,7 @@ class Scheduler:
                     waits.append((r["next"] - now).total_seconds())
                 rows.append({"id": b["id"], "game": b["game"], "due": r["plan"].keys if r["plan"] else [],
                              "why": r["why"], "next": r["next"].strftime("%Y-%m-%d %H:%M") if r["next"] else "",
-                             "final": bool(r.get("final"))})  # 今天不会再自动跑了（这一轮跑完 / 时段已过 / 熔断）
+                             "final": bool(r.get("final")), "capped": r.get("capped") or []})  # 今天不会再自动跑了（这一轮跑完 / 时段已过 / 熔断）
                 if r["plan"] and r["plan"].keys:
                     ready.append((b, r["plan"]))
             self.batch_info = rows
@@ -471,6 +477,7 @@ class Scheduler:
         """开跑：记下自动运行次数，「立即」批次标成已跑，把算好的任务交给运行进程。"""
         sch = Schedule(self.cfg)
         day = sched_day()
+        t0 = now_bj()
         for b, p in group:
             for x in p.skipped:  # 这批里跳过的任务：记进调度记录（日程页能看到）
                 self.log(f"跳过：{x}", b["game"])
@@ -497,14 +504,40 @@ class Scheduler:
         self.child = spawn_run(self.cfg, [{"game": b["game"], "batch": b["id"], "routine": b.get("routine", ""), "items": p.items, "keys": p.keys,
                                          **({"hires": b["hires"]} if b.get("hires") else {})}
                                        for b, p in group], by)
-        def waiter(c=self.child, pc=pc_run):
+        def waiter(c=self.child, pc=pc_run, grp=group, t0=t0):
             c.wait()
+            self._refund(grp, t0)
             if pc and OWN_INPUT.get("t1", 0) is None:
                 import time
                 OWN_INPUT["t1"] = time.time()
             self.wake()  # 跑完马上看下一批
         threading.Thread(target=waiter, daemon=True).start()
         self.log("开始运行：" + "、".join(self.cfg["games"][b["game"]]["name"] for b, _ in group))
+
+    def _refund(self, group, t0: str):
+        """11-06：自动补跑的次数只算「这次真跑了、而且没做成」的任务。被停止、让出、程序崩掉、没轮到的，
+        这次没有新的失败结果——开始时加上的次数退回去（以前全算，恋与深空被让出两次后整套都不再自动跑）。
+        一项结果都没出的不退（工具起不来之类），免得一直重开。"""
+        from .store import NEED_ATTENTION
+        for b, p in group:
+            if b["start"]["mode"] == "now":
+                continue
+            try:
+                g = self.cfg["games"][b["game"]]
+                st = self.store.status(b["game"], game_day(g))
+                fresh = [k for k in p.keys if st.get(k, {}).get("at", "") >= t0]
+                if not fresh:  # 一项结果都没出（工具起不来、一开始就崩）：照算，免得反复重开
+                    continue
+                back = [k for k in p.keys if not (k in fresh and st[k].get("result") in NEED_ATTENTION)]
+                if not back:
+                    continue
+                def fn(gs, back=back):
+                    for k in back:
+                        if gs["attempts"].get(k):
+                            gs["attempts"][k] -= 1
+                self._save_game_state(b["game"], fn)
+            except Exception as e:
+                self.log(f"退回补跑次数出错：{type(e).__name__}: {e}", b["game"])
 
     def cancel_queued(self) -> list[str]:
         """你点了停止：今天排着、还没开始的「立即」批次也不再开始，记进「继续」（点继续时一起接着跑）。"""
