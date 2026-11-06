@@ -55,8 +55,9 @@ async function renderSchedule() {
     <div class="sch-wrap2">
       <section class="glass panel sch-today" aria-label="今天">
         <div class="ph"><h3>今天</h3><span class="xsmall faint num">${run.length ? `${run.length} 正在跑 · ` : ''}${next.length} 接下来 · ${done.length} 跑过</span></div>
-        <div class="sch-th" aria-hidden="true"><span></span><span>任务序列</span><span>什么时候</span><span>状态</span><span></span></div>
-        <h4 class="sch-seg">接下来${next.length > 1 ? ' <span>按住左边的 ⠿ 拖动改顺序：定时的以后每天也这样，临时加的只改今天</span>' : ''}</h4>
+        <div class="sch-bars-slot"></div>
+        <div class="sch-th" aria-hidden="true"><span></span><span>任务序列</span><span>状态</span><span></span></div>
+        <h4 class="sch-seg">接下来${next.length > 1 ? ' <span>按住左边的 ⠿ 拖动改顺序：定时的以后每天也这样，临时加的只改今天；点 ▾ 展开改这一条今天跑哪些</span>' : ''}</h4>
         <div class="sch-list" id="sch-next">${next.length ? withHours(next) : '<div class="xsmall faint sch-empty">今天没有要等的了</div>'}</div>
         <h4 class="sch-seg">跑过的</h4>
         <div class="sch-list">${done.length ? done.map(([b, i]) => itemRow(b, i)).join('') : '<div class="xsmall faint sch-empty">还没有</div>'}</div>
@@ -85,46 +86,103 @@ function withHours(next) {
     return sep + itemRow(b, i, true);
   }).join('');
 }
+// 批注 #203：「就绪 / 等待」换成具体在等什么
+function waitLabel(b) {
+  if (b.section !== 'next' || !['ready', 'waiting'].includes(b.state)) return '';
+  const w = b.why || '';
+  if (w.startsWith('等闲时')) return '等闲时';
+  if (w.startsWith('排队中')) return '排队中';
+  const m = w.match(/^(\d\d:\d\d) 开始/) || w.match(/等时间到：(\d\d:\d\d)/) || w.match(/^推迟到 (\d\d:\d\d)/);
+  if (m) return `等 ${bjToLocal(m[1])}`;
+  if (w.includes('分钟内不补跑')) return '等补跑间隔';
+  if (w.startsWith('屏幕锁着')) return '等解锁';
+  if (w.includes('恢复调度后开始')) return '暂停中';
+  if (w.startsWith('自动调度关着')) return '调度关着';
+  return '';
+}
+// 11-06：日程条目展开（▾）= 这一条今天要跑的任务清单：拖动改顺序、移除、添加（只改今天，不改任务预设）
+const schOpen = () => (S.schOpen ||= new Set());
+function tasksHtml(b, live) {
+  const ks = b.keys || [];
+  const ro = live || b.requeue || b.error;
+  const cur = live ? S.running?.current?.task : '';
+  const pill = k => {
+    if (k === cur) return '<span class="pill run">运行中</span>';
+    const r = b.kstate?.[k]; if (!r) return '';
+    const [t, c] = r === 'skipped' ? ['今天跳过', 'off'] : (RES[r] || [r, 'off']);
+    return `<span class="pill ${c}">${esc(t)}</span>`;
+  };
+  const rows = ks.map((k, j) => `<div class="bct${k === cur ? ' live' : ''}" data-k="${esc(k)}">
+    <span class="bct-grip"${ro ? '' : ' title="按住拖动改顺序"'}>${ro ? '' : ICON.grip}</span><span class="bct-no num">${j + 1}</span>
+    <span class="bct-nm">${esc(tn(k))}</span><span class="bct-st">${pill(k)}</span>
+    ${ro ? '<span></span>' : `<button type="button" class="btn icon xs ghost" data-act="sch-tk-del" data-id="${esc(b.id)}" data-k="${esc(k)}" aria-label="移除 ${esc(tn(k))}" title="今天这一条不跑它">${ICON.x}</button>`}</div>`).join('');
+  const foot = ro
+    ? `<div class="xsmall faint">${live ? '正在跑，跑完或停下后才能改' : b.requeue ? '这是放回来重跑的几项：要改去「今日任务」' : ''}</div>`
+    : `<div class="bct-foot"><button type="button" class="linkbtn xsmall" data-act="sch-tk-add" data-id="${esc(b.id)}">＋ 添加任务</button>
+      ${b.edited ? `<button type="button" class="linkbtn xsmall" data-act="sch-tk-reset" data-id="${esc(b.id)}">恢复${b.kind === 'rule' ? '任务预设里' : '原来'}的清单</button>` : ''}
+      <span class="xsmall faint">这里改的只管今天${b.kind === 'rule' ? '，任务预设不变' : ''}</span></div>`;
+  return `<div class="bc-tasks${ro ? '' : ' can-edit'}" data-id="${esc(b.id)}">${rows || '<div class="xsmall faint">没有要跑的任务</div>'}${foot}</div>`;
+}
+async function schSetTasks(id, keys, msg) {
+  try { await api('PUT', `/api/schedule/today/items/${encodeURIComponent(id)}/tasks`, { keys }); toast(msg); renderSchedule(); } catch (e) { fail(e); }
+}
+pointerSort({ box: '.bc-tasks.can-edit', item: '.bct', handle: '.bc-tasks.can-edit .bct-grip', onDrop: (el, to, before) => {
+  const id = el.closest('.bc-tasks').dataset.id, b = S.sch?.items.find(x => x.id === id); if (!b) return;
+  const ks = [...b.keys], k = el.dataset.k; ks.splice(ks.indexOf(k), 1); ks.splice(ks.indexOf(to.dataset.k) + (before ? 0 : 1), 0, k);
+  schSetTasks(id, ks, '今天的顺序已改（任务预设不变）');
+} });
+async function schTasksAct(act, el) {
+  const b = S.sch?.items.find(x => x.id === el.dataset.id); if (!b) return;
+  if (act === 'sch-fold') { const o = schOpen(); o.has(b.id) ? o.delete(b.id) : o.add(b.id); return renderSchedule(); }
+  if (act === 'sch-tk-reset') return schSetTasks(b.id, null, '已恢复：今天按原来的清单跑');
+  if (act === 'sch-tk-del') {
+    const ks = b.keys.filter(k => k !== el.dataset.k);
+    if (!ks.length) {
+      if (await confirmBox('这是最后一项', '一项都不剩的话，不如今天跳过这一条。要今天跳过吗？', '今天跳过')) { const t = document.createElement('i'); t.dataset.id = b.id; t.dataset.on = '1'; scheduleAct('sch-skip', t); }
+      return;
+    }
+    return schSetTasks(b.id, ks, `今天这一条不跑「${tn(el.dataset.k)}」了`);
+  }
+  if (act === 'sch-tk-add') {
+    const add = await addTodayTasks(b.game, { pick: true, have: b.keys, title: itemTitle(b) });
+    if (add?.length) schSetTasks(b.id, [...b.keys, ...add], `已加到这一条的最后：${add.map(tn).join('、')}`);
+  }
+}
 function itemRow(b, i, draggable = false) {
   const c = newsColor(b.game);
   const [label, cls] = SCH_STATE[b.state] || ['等待', 'off'];
   const live = b.section === 'running' && S.running?.running && S.running.current?.game === b.game;
   const src = b.kind === 'rule' ? `定时：${b.when_text}` : ['now', 'queue'].includes(b.when?.kind) ? '只跑这一次' : `只跑这一次 · ${b.when_text}`;
+  const wl = waitLabel(b);  // 批注 #203：还在等什么（等闲时 / 排队中 / 等 HH:MM）直接写在状态上
   const why = (b.section === 'next' || b.final) && b.why && !(S.sch?.scheduler === false && b.why.startsWith('自动调度关着')) ? b.why : '';
   const acts = [];
   if (live) acts.push(`<button class="btn xs warn" data-act="stop">${ICON.stop}停止</button>`);
-  if (b.section === 'next') {
-    acts.push(`<button class="btn xs" data-act="sch-now" data-id="${esc(b.id)}" title="不等条件，挪到接下来的第一个">${ICON.play}现在跑</button>`);
-    acts.push(`<button class="btn xs ghost" data-act="sch-skip" data-id="${esc(b.id)}" data-on="1">今天跳过</button>`);
-  }
-  if (b.state === 'skipped') acts.push(`<button class="btn xs ghost" data-act="sch-skip" data-id="${esc(b.id)}" data-on="0">恢复</button>`);
+  // 11-06 批注 #206：现在跑 / 今天跳过 / 恢复 都在右键菜单里了，卡片上不再放
   if (b.section === 'done' && b.bad?.length) acts.push(`<button class="btn xs" data-act="sch-rerun-bad" data-id="${esc(b.id)}">重跑失败项</button>`, `<button class="btn xs ghost" data-act="mark-done" data-gid="${esc(b.game)}" data-keys="${esc(b.bad.join('\n'))}" title="今天不再算失败，也不再自动重跑">标为已完成</button>`, `<a class="btn xs ghost" href="#/g/${esc(b.game)}/runs">看运行记录</a>`);
   if (b.kind === 'once' && b.tasks?.length && !b.routine) acts.push(`<button class="btn xs ghost" data-act="sch-save-routine" data-id="${esc(b.id)}">存为任务预设</button>`);
   if (b.kind === 'once' && b.section === 'next') acts.push(`<button class="btn xs ghost" data-act="sch-del" data-id="${esc(b.id)}" aria-label="删掉这一条">删掉</button>`);
   const R = S.running;
   const pct = live && b.keys?.length ? Math.round(b.done / b.keys.length * 100) : 0;
   const stText = live ? `运行中 · ${esc(tn(R.current.task) || '准备中')}${b.keys?.length ? ` · ${b.done + 1} / ${b.keys.length}` : ''}${R.current.since ? ` · 已 ${dur(nowBjMs() - bjMs(R.current.since))}` : ''}`
-    : `${label}${b.state !== 'done' && b.keys?.length ? ` · ${b.done} / ${b.keys.length}` : ''}${b.last && b.section === 'done' ? ` · ${esc(bjToLocal(b.last))}` : ''}`;
-  // 11-06：今天被「现在跑 / 排到队尾」挪过的定时条目，显示今天这一次怎么开始
-  const when = b.kind === 'rule' && b.start?.mode === 'now' ? (b.start.queue ? '轮到时' : '现在') + ' · 今天' : b.kind === 'rule' ? whenShort(b) : b.when?.kind === 'now' ? '现在' : b.when?.kind === 'queue' ? '轮到时' : whenShort(b);
+    : `${wl || label}${b.state !== 'done' && b.keys?.length ? ` · ${b.done} / ${b.keys.length}` : ''}${b.last && b.section === 'done' ? ` · ${esc(bjToLocal(b.last))}` : ''}`;
+  const open = schOpen().has(b.id);
   const notes = [b.kind === 'once' ? '只跑这一次' : '', b.pc ? '电脑端' : '', b.est_minutes && b.section === 'next' ? `预计约 ${Math.round(b.est_minutes)} 分钟` : '',
     b.rerun ? '今天做过的也再跑' : ''].filter(Boolean).join(' · ');
   const row = `<div class="bcard sch-item${b.state === 'attention' ? ' warm' : ''}${live ? ' live' : ''}${b.state === 'skipped' ? ' off' : ''}${draggable ? ' sortable' : ''}" data-i="${i}" data-id="${esc(b.id)}" style="--gc:${c}">
     <span class="bc-no"><span class="bgrip" aria-hidden="true">${draggable ? ICON.grip : ''}</span></span>
-    <span class="bc-name"><i class="b-bar"></i>${b.section === 'done'
+    <span class="bc-name"><button type="button" class="bc-fold${open ? ' on' : ''}" data-act="sch-fold" data-id="${esc(b.id)}" aria-expanded="${open}" title="${open ? '收起' : '展开这一条今天要跑的任务：可以改顺序、移除、添加（只管今天）'}">${ICON.chev}</button><i class="b-bar"></i>${b.section === 'done'
       ? `<a href="#/g/${esc(b.game)}/runs" draggable="false" title="看这个游戏今天的运行记录">${esc(itemTitle(b))}</a>`
       : `<a href="#/g/${esc(b.game)}/today" draggable="false" title="去改今天的任务：选项、跳过、再跑一次都只管今天（要以后都这样，去「任务预设」）">${esc(itemTitle(b))}</a>`}</span>
-    <span class="bc-when" title="${esc(src)}">${b.kind === 'rule' ? `<button type="button" class="linkbtn" data-act="rule-edit" data-id="${esc(b.id)}" title="改启动时间">${esc(when)}</button>` : esc(when)}</span>
-    <div class="bc-st"><span class="pill ${cls}">${stText}</span>
-      ${b.section === 'next' && b.eta_late ? '<div class="xsmall bwarn" title="按顺序和预计时长估的；赶时段的任务可能插队">可能赶不上它的时段</div>' : ''}${b.section === 'next' && !b.eta && b.eta_note ? `<div class="xsmall faint">${esc(b.eta_note)}</div>` : ''}
+    <div class="bc-st"><span class="pill ${wl ? 'off' : cls}" title="${esc([src, why].filter(Boolean).join('\n'))}">${stText}</span>
+      ${b.section === 'next' && b.eta_late ? '<div class="xsmall bwarn" title="按顺序和预计时长估的；赶时段的任务可能插队">可能赶不上它的时段</div>' : ''}${b.section === 'next' && !b.eta && b.eta_note && !wl ? `<div class="xsmall faint">${esc(b.eta_note)}</div>` : ''}
       ${notes ? `<div class="xsmall faint">${esc(notes)}</div>` : ''}
-      ${!live && why ? (why.startsWith('工具没接好') ? `<a class="xsmall bwarn tool-fix" href="#/settings" title="去「设置 → 工具与游戏」改这个游戏的工具路径">${esc(why)} · 去改路径</a>`
+      ${!live && why && !wl ? (why.startsWith('工具没接好') ? `<a class="xsmall bwarn tool-fix" href="#/settings" title="去「设置 → 工具与游戏」改这个游戏的工具路径">${esc(why)} · 去改路径</a>`
         : `<div class="xsmall faint" title="${esc(why)}">${esc(why.startsWith('等闲时') ? '等闲时' : why)}</div>`) : ''}
       ${b.section === 'done' && b.bad?.length ? `<div class="xsmall bwarn">没做成：${esc(b.bad.map(tn).join('、'))}</div>` : ''}
       ${b.error ? `<div class="xsmall bwarn">${esc(b.error)}</div>` : ''}
       ${(b.warnings || []).map(w => `<div class="xsmall bwarn">${esc(w)}</div>`).join('')}
     </div>
-    <div class="bacts">${acts.join('')}</div></div>`;
+    <div class="bacts">${acts.join('')}</div>${open ? tasksHtml(b, live) : ''}${b.edited && !open ? `<div class="bc-edited xsmall faint">今天改过要跑的任务（${b.keys?.length || 0} 项），点 ▾ 看</div>` : ''}</div>`;
   return live ? `<div class="bc-live">${row}<div class="bc-prog" aria-hidden="true"><i style="width:${pct}%"></i></div></div>` : row;
 }
 

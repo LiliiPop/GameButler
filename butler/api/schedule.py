@@ -76,6 +76,8 @@ def schedule_view(api, day) -> dict:
             section = "next"
         last = max((st[k].get("at", "") for k in tried), default="")
         out.append({**b, "name": g["name"], "keys": keys, "done": len(done), "bad": bad, "error": err,
+                    "kstate": {k: ("skipped" if k in skipt else st.get(k, {}).get("result", "")) for k in keys},
+                    "edited": bool(b.get("edit")),
                     "est_minutes": sch.estimate_minutes(b["game"], keys) if keys else 0,
                     "state": state, "section": section, "last": last[11:16] if last else (ran[11:16] if ran else ""),
                     "why": "正在跑" if running else (doc["ran_why"].get(b["id"]) or r.get("why", "")),
@@ -165,6 +167,25 @@ def _(api, m, q, b):  # 加一条一次性的（「开始」「选任务运行�
     return {"ok": True, "batch": api.enqueue(day_of(m.group(1)), b)}
 
 
+@route("PUT", r"/api/schedule/([\w-]+)/(?:items|batch)/([\w-]+)/tasks")
+def _(api, m, q, b):
+    """11-06：日程里展开一条改今天跑哪些、什么顺序（只改今天）。keys = null / [] → 回到任务预设里的。"""
+    day, bid = day_of(m.group(1)), m.group(2)
+    sch = Schedule(api.cfg)
+    it = next((x for x in sch.day(day)["batches"] if x["id"] == bid), None)
+    if not it:
+        raise ValueError("今天没有这一条")
+    keys = [str(k) for k in (b.get("keys") or []) if str(k).strip()]
+    ad = api.adapter(it["game"])
+    names = set(ad.task_names()) | {it2 for it2 in sch.batch_keys({**it, "edit": None, "tasks": it.get("tasks") if it["kind"] == "once" else []})}
+    bad = [k for k in keys if k not in names and k.split(" · ")[0].split(" #")[0] not in names]
+    if bad:
+        raise ValueError("这个工具里没有这些任务：" + "、".join(bad))
+    sch.set_edit(day, bid, keys or None)
+    api.sched.wake()
+    return {"ok": True, "keys": keys}
+
+
 @route("POST", r"/api/schedule/([\w-]+)/(?:items|batch)/([\w-]+)/(skip|unskip|run-now|run-queue|delete|save-as-routine|rerun-bad)")
 def _(api, m, q, b):
     day, bid, op = day_of(m.group(1)), m.group(2), m.group(3)
@@ -181,7 +202,7 @@ def _(api, m, q, b):
         from ..signals import clear_fuse
         clear_fuse(api.cfg, it["game"])
         # 不等条件，这一条自己挪到「接下来」的第一个、马上跑（11-01：不再另加一条，跑完「跑过的」里只有它一条）
-        keys = it.get("tasks") if it.get("requeue") else sch.batch_keys({**it, "tasks": it.get("tasks") if it["kind"] == "once" else []})
+        keys = it.get("tasks") if it.get("requeue") else (it.get("edit") or sch.batch_keys({**it, "tasks": it.get("tasks") if it["kind"] == "once" else []}))
         sch.requeue(day, bid, keys or [], rerun=bool(b.get("rerun")))  # rerun：「跑过的」里的条目再跑一遍（11-06）
         ids = [x["id"] for x in sch.day(day)["batches"]]
         sch.set_order(day, [bid] + [i for i in ids if i != bid])
@@ -189,7 +210,7 @@ def _(api, m, q, b):
         # 11-06：右键「排到队尾」——这一条改成「轮到时」，挪到今天的最后，前面的轮完再跑（跑完回到原来的定时）
         from ..signals import clear_fuse
         clear_fuse(api.cfg, it["game"])
-        keys = it.get("tasks") if it.get("requeue") else sch.batch_keys({**it, "tasks": it.get("tasks") if it["kind"] == "once" else []})
+        keys = it.get("tasks") if it.get("requeue") else (it.get("edit") or sch.batch_keys({**it, "tasks": it.get("tasks") if it["kind"] == "once" else []}))
         sch.requeue(day, bid, keys or [], queue=True, rerun=bool(b.get("rerun")))
         ids = [x["id"] for x in sch.day(day)["batches"]]
         sch.set_order(day, [i for i in ids if i != bid] + [bid])

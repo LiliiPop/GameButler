@@ -109,6 +109,7 @@ document.addEventListener('click', async e => {
     case 'pcres-on': api('PUT', `/api/games/${el.dataset.gid}`, { resolution_switch: el.dataset.on === '1' }).then(loadPcres).catch(fail); break;
     case 'pcres-restore': api('POST', `/api/pcres/${el.dataset.gid}/restore`).then(r => { toast(r.msg); loadPcres(); }).catch(fail); break;
     case 'sch-add': case 'sch-now': case 'sch-queue': case 'sch-skip': case 'sch-del': case 'sch-rerun-bad': case 'sch-save-routine': case 'sch-on': scheduleAct(act, el); break;
+    case 'sch-fold': case 'sch-tk-del': case 'sch-tk-add': case 'sch-tk-reset': schTasksAct(act, el); break;
     case 'set-wake': api('PUT', '/api/settings/scheduler', { wake_from_sleep: el.dataset.on === '1' }).then(() => { toast(el.dataset.on === '1' ? '叫醒电脑已打开' : '叫醒电脑已关闭'); renderSettings(); }).catch(fail); break;
     case 'app-restart': api('POST', '/api/app/restart').catch(() => {}); toast('正在重启管家后台，十来秒后自动连回'); setTimeout(() => location.reload(), 15000); break;
     case 'news-search': { const w = el.closest('.news-q'); const open = !w.classList.contains('open') || !!$('#news-q').value; w.classList.add('open'); S.newsUi.qOpen = true; if (open) $('#news-q').focus(); else { w.classList.remove('open'); S.newsUi.qOpen = false; } break; }

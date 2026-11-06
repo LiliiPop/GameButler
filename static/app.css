@@ -932,7 +932,7 @@ a.b-row:hover .b-name b{text-decoration:underline;text-underline-offset:4px}
 /* 日程（B 板）：一张表 # / 这一批 / 什么时候 / 状态 / 操作 */
 .sch{gap:36px}
 .sch-wrap2{gap:64px;grid-template-columns:minmax(0,1fr) 320px}
-.sch-th,.bcard{display:grid;grid-template-columns:14px 240px 120px minmax(0,1fr) max-content;gap:16px;align-items:center}
+.sch-th,.bcard{display:grid;grid-template-columns:14px 260px minmax(0,1fr) max-content;gap:16px;align-items:center}
 .sch-th{padding-bottom:10px;border-bottom:1px solid var(--ink);font-size:12px;font-weight:500;color:var(--mute);margin-top:8px}
 .bcard,.bcard.warm,.bcard.live{padding:16px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:none;box-shadow:none}
 .bcard.live{border-bottom:0;padding-bottom:14px}
@@ -992,7 +992,7 @@ a.b-row:hover .b-name b{text-decoration:underline;text-underline-offset:4px}
   .brand,.nav{height:auto;gap:16px}.nav a{padding:6px 0}
   .b-row{grid-template-columns:1fr auto}.b-det{grid-column:1/-1}
   .sch-th{display:none}
-  .bcard{grid-template-columns:24px minmax(0,1fr)}.bc-when,.bc-st,.bacts{grid-column:2}
+  .bcard{grid-template-columns:24px minmax(0,1fr)}.bc-st,.bacts{grid-column:2}
 }
 
 /* 界面批注（调优期间用，定稿后删掉这一段和 static/js/notes.js） */
@@ -1380,3 +1380,23 @@ section.set > .section-h + div.small{padding-top:13px}
 section.set > .section-h + .ev-game{padding-top:16px}
 /* 批注 #195（11-03）：没有定时、但有时段任务的预设卡片上的提醒 */
 .pk-hint{color:var(--orange-ink);line-height:1.6}
+
+/* 11-06：日程条目展开（▾）看这一条今天要跑的任务：拖动改顺序、移除、添加（只管今天） */
+.bc-name{gap:8px}
+.bc-fold{flex:none;width:22px;height:22px;display:grid;place-items:center;border:0;background:none;border-radius:6px;color:var(--mute);cursor:pointer;padding:0}
+.bc-fold:hover{background:var(--line);color:var(--ink)}
+.bc-fold .chev{transform:rotate(-90deg);transition:transform .15s}
+.bc-fold.on .chev{transform:none}
+.bc-tasks{grid-column:1/-1;margin:2px 0 0 30px;padding:6px 0 2px 14px;border-left:2px solid color-mix(in srgb,var(--gc) 45%,transparent);display:flex;flex-direction:column}
+.bct{display:grid;grid-template-columns:14px 22px minmax(0,1fr) max-content 26px;gap:10px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--line);font-size:14px}
+.bct:last-of-type{border-bottom:0}
+.bct-grip{width:14px;color:var(--faint);opacity:.5;cursor:grab;display:flex}
+.bct:hover .bct-grip{opacity:1}
+.bct-no{color:var(--mute);font-size:12px;text-align:right}
+.bct-nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bct.live .bct-nm{font-weight:700;color:var(--blue-ink)}
+.bct .pill{font-size:12px}
+.bct.dragging{position:relative;z-index:5;box-shadow:0 8px 22px -12px rgba(var(--ink-rgb),.35);background:var(--surface)}
+.bct-foot{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:8px 4px 2px}
+.bc-edited{grid-column:2/-1;margin-top:-6px}
+.sch-bars-slot #bars{margin:12px 0 4px}

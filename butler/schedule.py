@@ -266,6 +266,11 @@ class Schedule:
                 once.append(self.as_batch(self.clean_once(b), "once"))
             except ValueError:  # 用的任务预设已经删了：这一条不再显示
                 continue
+        # 11-06：日程里展开改过「今天这一条跑哪些、什么顺序」的（days 里 edit {id: [任务键…]}）：只改今天，不改任务预设
+        for b in rules + once:
+            ed = (d.get("edit") or {}).get(b["id"])
+            if ed:
+                b.update(edit=list(ed), tasks=list(ed))
         # 「重跑失败项」：原条目回到「接下来」，只跑没做成的那几项（days 里 requeue {id: [任务键…]}）
         for b in rules + once:
             keys = (d.get("requeue") or {}).get(b["id"])
@@ -409,10 +414,33 @@ class Schedule:
 
     # ---------- 今天各条里的任务 ----------
     def batch_items(self, b: dict) -> list[dict]:
-        """这一条要跑的任务项（不含启动任务以外的过滤；按它用的那套）。"""
+        """这一条要跑的任务项（不含启动任务以外的过滤；按它用的那套）。
+        今天改过清单的（edit）：按改过的顺序，选项用它那套预设里的，预设里没有的用工具默认。"""
         from .planner import source
         g = self.cfg["games"][b["game"]]
+        if b.get("edit") and not b.get("requeue"):
+            base = source(self.cfg, self.store, b["game"], game_day(g), b.get("routine", ""), None) if b.get("routine") else []
+            out = []
+            for k in b["edit"]:
+                hit = next((t for t in base if item_key(t) == k or t.get("_base") == k), None) or \
+                      next((t for t in base if t["task"] == k), None)
+                if hit is None:
+                    from .planner import resolve_named
+                    hit = resolve_named(self.store, b["game"], [k])[0]
+                if hit not in out:
+                    out.append(hit)
+            return out
         return source(self.cfg, self.store, b["game"], game_day(g), b.get("routine", ""), b.get("tasks") or None)
+
+    def set_edit(self, day: date, bid: str, keys: list[str] | None):
+        """今天这一条跑哪些任务、什么顺序（只改今天）。None / 空 = 回到任务预设里的。"""
+        def fn(d):
+            e = d.setdefault("edit", {})
+            if keys:
+                e[bid] = list(dict.fromkeys(keys))
+            else:
+                e.pop(bid, None)
+        jsonio.update(self.day_path(day), {}, fn)
 
     def batch_keys(self, b: dict) -> list[str]:
         """条目包含的任务键（不含启动任务）。"""

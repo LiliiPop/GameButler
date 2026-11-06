@@ -107,7 +107,7 @@ class Api:
         for x in doc["batches"]:
             if x["game"] != body["game"] or x["kind"] != "rule" or not left:
                 continue
-            ks = [k for k in sch.batch_keys({**x, "tasks": [], "requeue": False}) if k in left]
+            ks = [k for k in (x.get("edit") or sch.batch_keys({**x, "tasks": [], "requeue": False})) if k in left]
             if not ks:
                 continue
             left = [k for k in left if k not in ks]

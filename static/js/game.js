@@ -1003,10 +1003,12 @@ async function taskSkip(key, on) {
 
 // 单项任务（11-02）：今日任务的「添加任务」和右上角「单项任务」都用这个弹窗。列出这个游戏能做的所有任务，点选几项，
 // 「加入队列」= 排在今天的队尾，前面的轮完才开始；「立即开始」= 现在就跑（正在跑别的就排在它后面）
-async function addTodayTasks(gid) {
+// opt.pick：只选任务、把选中的键交回去（日程里展开一条后「＋ 添加任务」用，同一个弹窗）；opt.have = 已经在清单里的，不再列出
+async function addTodayTasks(gid, opt = {}) {
   gid = gid || S.ed?.gid; if (!gid) return;
   let sc; try { sc = await schema(gid); } catch (e) { return fail(e); }
-  const list = (sc.tasks || []).filter(t => !t.placeholder && t.name !== game(gid)?.recovery_task);
+  const have = new Set(opt.have || []);
+  const list = (sc.tasks || []).filter(t => !t.placeholder && t.name !== game(gid)?.recovery_task && !have.has(t.name));
   const st = S.ed?.gid === gid ? (S.ed.status || {}) : {};
   const sel = new Set();
   const html = q => {
@@ -1017,12 +1019,12 @@ async function addTodayTasks(gid) {
       ${st[t.name] ? badge(st[t.name].result) : ''}</button>`).join('') || '<div class="empty">没有匹配的任务</div>'}</div>`;
   };
   const v = await modal({
-    title: `单项任务 · ${shortName(gid)}`, wide: true, ok: '立即开始', alt: '加入队列',
+    title: opt.pick ? `添加任务 · ${opt.title || shortName(gid)}` : `单项任务 · ${shortName(gid)}`, wide: true, ok: opt.pick ? '加进去' : '立即开始', ...(opt.pick ? {} : { alt: '加入队列' }),
     body: `<label class="field">${ICON.search}<input type="search" id="ta-q" placeholder="搜索任务名" aria-label="搜索任务名"></label><div id="ta-list">${html('')}</div>
-      <div class="xsmall faint">选项按任务预设里的设置（没有就用工具默认）。今天做过的也会再跑一次。加入队列：排在今天的队尾，前面的轮完才开始。</div>`,
+      <div class="xsmall faint">${opt.pick ? '加在这一条清单的最后，只管今天。选项按任务预设里的设置（没有就用工具默认）。' : '选项按任务预设里的设置（没有就用工具默认）。今天做过的也会再跑一次。加入队列：排在今天的队尾，前面的轮完才开始。'}</div>`,
     onMount: (m, setVal) => {
       const q = $('#ta-q', m); setTimeout(() => q.focus(), 40);
-      const upd = () => { const n = sel.size; m.querySelectorAll('[data-m="ok"],[data-m="alt"]').forEach(b => { b.disabled = !n; }); const o = $('[data-m="ok"]', m); if (o) o.textContent = n ? `立即开始（${n} 项）` : '先选任务'; };
+      const upd = () => { const n = sel.size; m.querySelectorAll('[data-m="ok"],[data-m="alt"]').forEach(b => { b.disabled = !n; }); const o = $('[data-m="ok"]', m); if (o) o.textContent = n ? `${opt.pick ? '加进去' : '立即开始'}（${n} 项）` : '先选任务'; };
       q.addEventListener('input', () => { $('#ta-list', m).innerHTML = html(q.value); });
       m.addEventListener('click', e => { const b = e.target.closest('[data-ta]'); if (!b) return; const n = b.dataset.ta; sel.has(n) ? sel.delete(n) : sel.add(n); $('#ta-list', m).innerHTML = html(q.value); upd(); });
       setVal(() => [...sel]); upd();
@@ -1031,6 +1033,7 @@ async function addTodayTasks(gid) {
   if (!v) return;
   const keys = v.alt ? v.value : v;
   if (!keys || keys === true || !keys.length) return;
+  if (opt.pick) return keys;
   return runTasks(gid, keys, v.alt ? 'queue' : 'now');
 }
 // 跑这几项：kind = queue（加入队列）/ now（立即开始）；今天做过的也再跑

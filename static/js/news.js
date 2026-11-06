@@ -125,7 +125,7 @@ const upcoming = it => !!it.start && it.start_note !== '最早读到' && newsSta
 function startsInText(it) {  // 按北京时间的日历天数算（后天 04:00 开始 = 「后天开始」，不是「1 天后」）
   const day = ms => Math.floor((ms + 8 * 36e5) / 864e5);
   const days = day(newsStartMs(it)) - day(nowBjMs());
-  return days <= 0 ? '今天开始' : days === 1 ? '明天开始' : days === 2 ? '后天开始' : `${days} 天后开始`;
+  return days <= 0 ? '今天开始' : days === 1 ? '明天开始' : days === 2 ? '后天开始' : `还有 ${days} 天开始`;
 }
 // 一个活动的图（11-02：同一个活动有多张图时都下了；按住左右拖动看这个活动的其他图）
 const bannerImgs = it => (it.imgs?.length ? it.imgs : [it.img]).filter(Boolean);
@@ -312,7 +312,7 @@ function newsPop(btn) {
     <div class="gpop-t"><span class="gtag" style="background:${newsColor(it.game)};color:${onColor(newsColor(it.game))}">${esc(shortName(it.game))}</span><b>${esc(tn(it.title))}</b></div>
     ${it.subtitle2 ? `<div class="xsmall muted pre">${esc(tn(it.subtitle2))}</div>` : ''}
     <div class="xsmall faint">${esc(it.cat_label || '')}${it.chars?.length ? ' · ' + esc(it.chars.join('、')) : ''}</div>
-    <div class="small"><b>${esc(it.end ? leftText(it.end) : '')}</b></div>`;
+    <div class="small"><b>${esc(upcoming(it) ? startsInText(it) : it.end ? leftText(it.end) : '')}</b></div>`;
   pop.hidden = false;
   const r = btn.getBoundingClientRect(); const w = Math.min(340, window.innerWidth - 24);
   pop.style.width = w + 'px';
@@ -337,7 +337,7 @@ function newsDetailHtml(it, content) {
   return `<div class="nd">
     ${it.img ? `<div class="nd-img"><img src="/news-img/${encodeURIComponent(it.img)}" alt=""></div>` : ''}
     <div class="nd-meta small"><span class="gtag" style="background:${newsColor(it.game)};color:${onColor(newsColor(it.game))}">${esc(shortName(it.game))}</span>
-      ${it.end ? `<b>${esc(leftText(it.end))}</b>` : ''}
+      ${upcoming(it) ? `<b>${esc(startsInText(it))}</b>` : it.end ? `<b>${esc(leftText(it.end))}</b>` : ''}
       <span class="muted">${it.start ? `开始 ${esc(newsStart(it))}` : ''}${it.end && !it.forecast ? `　结束 ${esc(bothTimes(it.end))}` : ''}</span></div>
     ${it.subtitle2 ? `<div class="nd-sub pre">${esc(tn(it.subtitle2))}</div>` : ''}
     ${it.url || (it.source_title && it.source_title !== it.title) ? `<div class="xsmall faint">原文：${it.url ? `<a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.source_title || it.title)} ↗</a>` : esc(it.source_title)}</div>` : ''}

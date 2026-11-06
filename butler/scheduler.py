@@ -203,7 +203,7 @@ class Scheduler:
             keys = [k for k in p.keys if gs["attempts"].get(k, 0) < maxn]
             if not keys:
                 return {**row, "plan": None, "final": True, "why": "今天这一轮跑完了，没做成的等你处理（调度设置里可以设「失败后自动补跑」）"
-                        if maxn == 1 else f"剩下的任务已自动跑过 {maxn} 次，等你处理"}
+                        if maxn == 1 else f"没做成的已自动重试到上限（共试了 {maxn} 次都没成），不再自动跑；没有算成完成，等你处理：右键可重跑或标为已完成"}
             if gs["last_run"] and any(gs["attempts"].get(k) for k in keys):
                 last = datetime.strptime(gs["last_run"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=BJ)
                 gap = timedelta(minutes=int(sset["retry_gap_minutes"]))

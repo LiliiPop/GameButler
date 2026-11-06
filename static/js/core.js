@@ -294,6 +294,8 @@ function tickClock() {
 // 运行行（B 极简 L3）：放在当前页标题下面（没有标题的页放在顶栏下面）；#bars 这个节点一直留着，页面重画时挪回去
 const BARS = document.getElementById('bars');
 function placeBars() {
+  const slot = document.querySelector('#app .sch-bars-slot');  // 批注 #205：日程页放进「今天」里，「接下来」之前
+  if (slot) { if (BARS.parentElement !== slot) slot.appendChild(BARS); return; }
   const h = document.querySelector('#app .hero, #app .ghero');
   if (h) { if (h.nextElementSibling !== BARS) h.after(BARS); }
   else if (BARS.previousElementSibling !== $('#top')) $('#top').after(BARS);
