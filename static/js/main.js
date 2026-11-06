@@ -39,6 +39,7 @@ document.addEventListener('click', async e => {
     case 'pk-queue': case 'pk-copy': case 'pk-new': case 'pk-del': presetAct(act, el); break;
     case 'rule-edit': editRule(el.dataset.id); break;
     case 'rule-add': editRule(null, el.dataset.gid, el.dataset.name); break;
+    case 'go': location.hash = el.dataset.href; break;  // 11-06：右键菜单里的跳转
     case 'routine-open': S.pendingRoutine = el.dataset.name; location.hash = `#/g/${el.dataset.gid}/routine`; break;
     case 'mount-remove': removeGame(el.dataset.gid); break;
     case 'mount-edit': editGame(el.dataset.gid); break;
@@ -50,6 +51,7 @@ document.addEventListener('click', async e => {
     case 'skip-cur': skipCurrent(el.dataset.scope); break;
     case 'task-skip': taskSkip(el.dataset.key, el.dataset.on === '1'); break;
     case 'task-rerun': taskRerun(el.dataset.gid, (el.dataset.keys || '').split('\n').filter(Boolean)); break;
+    case 'task-queue': taskQueue(el.dataset.gid, (el.dataset.keys || '').split('\n').filter(Boolean)); break;
     case 'task-skip-many': taskSkipMany(el.dataset.gid, (el.dataset.keys || '').split('\n').filter(Boolean)); break;
     case 'mark-done': markDone(el.dataset.gid || S.ed?.gid, (el.dataset.keys || el.dataset.key || '').split('\n').filter(Boolean)); break;
     case 'suspend': api('POST', `/api/running/${el.dataset.on === '1' ? 'pause' : 'resume'}`).then(r => { toast(r.suspended ? '已原地暂停（BetterGI）' : '已继续'); pollRunning(); }).catch(fail); break;
@@ -105,7 +107,7 @@ document.addEventListener('click', async e => {
     case 'setup-done': location.hash = '#/'; break;
     case 'pcres-on': api('PUT', `/api/games/${el.dataset.gid}`, { resolution_switch: el.dataset.on === '1' }).then(loadPcres).catch(fail); break;
     case 'pcres-restore': api('POST', `/api/pcres/${el.dataset.gid}/restore`).then(r => { toast(r.msg); loadPcres(); }).catch(fail); break;
-    case 'sch-add': case 'sch-now': case 'sch-skip': case 'sch-del': case 'sch-rerun-bad': case 'sch-save-routine': case 'sch-on': scheduleAct(act, el); break;
+    case 'sch-add': case 'sch-now': case 'sch-queue': case 'sch-skip': case 'sch-del': case 'sch-rerun-bad': case 'sch-save-routine': case 'sch-on': scheduleAct(act, el); break;
     case 'set-wake': api('PUT', '/api/settings/scheduler', { wake_from_sleep: el.dataset.on === '1' }).then(() => { toast(el.dataset.on === '1' ? '叫醒电脑已打开' : '叫醒电脑已关闭'); renderSettings(); }).catch(fail); break;
     case 'app-restart': api('POST', '/api/app/restart').catch(() => {}); toast('正在重启管家后台，十来秒后自动连回'); setTimeout(() => location.reload(), 15000); break;
     case 'news-search': { const w = el.closest('.news-q'); const open = !w.classList.contains('open') || !!$('#news-q').value; w.classList.add('open'); S.newsUi.qOpen = true; if (open) $('#news-q').focus(); else { w.classList.remove('open'); S.newsUi.qOpen = false; } break; }

@@ -49,7 +49,7 @@ async function renderSchedule() {
         ${S.running?.running ? '' : '<button class="btn dark" data-act="run-all">开始全部</button>'}
       </div>
     </section>
-    ${d.scheduler === false ? `<div class="panel glass warnbar small">自动调度关着：只有「加入队列」的会跑，定时不会自己开始。<button class="btn xs" data-act="sch-on">开启自动调度</button></div>` : ''}
+    ${d.scheduler === false ? `<div class="panel glass warnbar small">自动调度关着：只有你手动排的（现在、轮到时）会跑，定时不会自己开始。<button class="btn xs" data-act="sch-on">开启自动调度</button></div>` : ''}
     ${powerWarnHtml(d.power || {}, d.routines || [])}
     ${dayTimelineHtml(d)}
     <div class="sch-wrap2">
@@ -105,7 +105,8 @@ function itemRow(b, i, draggable = false) {
   const pct = live && b.keys?.length ? Math.round(b.done / b.keys.length * 100) : 0;
   const stText = live ? `运行中 · ${esc(tn(R.current.task) || '准备中')}${b.keys?.length ? ` · ${b.done + 1} / ${b.keys.length}` : ''}${R.current.since ? ` · 已 ${dur(nowBjMs() - bjMs(R.current.since))}` : ''}`
     : `${label}${b.state !== 'done' && b.keys?.length ? ` · ${b.done} / ${b.keys.length}` : ''}${b.last && b.section === 'done' ? ` · ${esc(bjToLocal(b.last))}` : ''}`;
-  const when = b.kind === 'rule' ? whenShort(b) : b.when?.kind === 'now' ? '现在' : b.when?.kind === 'queue' ? '排队' : whenShort(b);
+  // 11-06：今天被「现在跑 / 排到队尾」挪过的定时条目，显示今天这一次怎么开始
+  const when = b.kind === 'rule' && b.start?.mode === 'now' ? (b.start.queue ? '轮到时' : '现在') + ' · 今天' : b.kind === 'rule' ? whenShort(b) : b.when?.kind === 'now' ? '现在' : b.when?.kind === 'queue' ? '轮到时' : whenShort(b);
   const notes = [b.kind === 'once' ? '只跑这一次' : '', b.pc ? '电脑端' : '', b.est_minutes && b.section === 'next' ? `预计约 ${Math.round(b.est_minutes)} 分钟` : '',
     b.rerun ? '今天做过的也再跑' : ''].filter(Boolean).join(' · ');
   const row = `<div class="bcard sch-item${b.state === 'attention' ? ' warm' : ''}${live ? ' live' : ''}${b.state === 'skipped' ? ' off' : ''}${draggable ? ' sortable' : ''}" data-i="${i}" data-id="${esc(b.id)}" style="--gc:${c}">
@@ -142,7 +143,7 @@ function bothHm(bj, bj2) {
 function ruleChip(u) {
   const d = u.days === 'daily' ? '每天' : '每周' + u.days.map(n => WEEK_MON[n - 1]).join('');
   const w = u.when || {};
-  const t = w.kind === 'queue' ? '加入队列' : w.kind === 'after_refresh' ? '刷新后马上' : w.kind === 'idle' ? `闲时${w.at ? ' · ' + bothHm(w.at) + ' 以后' : ''}` : bothHm(w.at, w.until);
+  const t = w.kind === 'queue' ? '轮到时' : w.kind === 'after_refresh' ? '刷新后马上' : w.kind === 'idle' ? `闲时${w.at ? ' · ' + bothHm(w.at) + ' 以后' : ''}` : bothHm(w.at, w.until);
   return `${d} ${t}`;
 }
 
@@ -257,7 +258,7 @@ function whenEditor(w, opts = {}) {  // 什么时候：时间段 / 闲时 / 刷�
   const k = w.kind || (opts.now ? 'queue' : 'at');
   const t = x => x ? bjToLocal(x) : '';
   return `<div class="be-start">
-    ${opts.now || opts.queue ? `<label class="rad"><input type="radio" name="we-kind" value="queue" ${k === 'queue' || k === 'now' ? 'checked' : ''}> <b>加入队列</b> <span class="xsmall faint">${opts.now ? '排在今天的队尾，前面的轮完才开始；里面只在某个时段跑的任务到了时段先跑，不等前面的。选「以后也这样」= 每天都排进队列' : '每天排进队列：前面的都轮完就跑；里面只在某个时段跑的任务（例如领体力 · 午间）到了时段先跑，不等前面的'}</span></label>` : ''}
+    ${opts.now || opts.queue ? `<label class="rad"><input type="radio" name="we-kind" value="queue" ${k === 'queue' || k === 'now' ? 'checked' : ''}> <b>轮到时</b> <span class="xsmall faint">${opts.now ? '排在今天的队尾，前面的轮完就轮到它；里面只在某个时段跑的任务到了时段先跑，不等前面的。选「以后也这样」= 每天都这样排' : '每天排在队尾：前面的都轮完就跑；里面只在某个时段跑的任务（例如领体力 · 午间）到了时段先跑，不等前面的'}</span></label>` : ''}
     <label class="rad nowrap"><input type="radio" name="we-kind" value="at" ${k === 'at' ? 'checked' : ''}> <b>定时</b> <input class="inp xs num t-short" type="time" id="we-at" value="${t(w.at) || '06:00'}"> 到 <input class="inp xs num t-short" type="time" id="we-until" value="${t(w.until)}"> <span class="xsmall faint">本地时间；默认截止到日常刷新时间</span></label>
     <label class="rad"><input type="radio" name="we-kind" value="idle" ${k === 'idle' ? 'checked' : ''}> <b>闲时</b>
       <span class="xsmall faint">满足「什么算闲时」就跑 · 最早 <input class="inp xs num t-short" type="time" id="we-iat" value="${k === 'idle' ? t(w.at) : ''}"> 起</span></label>
@@ -345,7 +346,7 @@ async function addFlow(gid0) {
   const short = {
     game: () => shortName(st.game),
     what: () => tmpOf() ? (st.tasks.size ? `单项任务 ${st.tasks.size} 项` : '单项任务') : (st.routine || '—'),
-    when: () => nowOf() ? '加入队列' : st.when.kind === 'idle' ? '闲时' : st.when.kind === 'after_refresh' ? '刷新后' : (st.when.at ? bjToLocal(st.when.at) : ''),
+    when: () => nowOf() ? '轮到时' : st.when.kind === 'idle' ? '闲时' : st.when.kind === 'after_refresh' ? '刷新后' : (st.when.at ? bjToLocal(st.when.at) : ''),
     rep: () => st.repeat === 'daily' && st.when.kind !== 'now' ? '以后也这样' : '只这一次',
   };
   const title = { game: '选择游戏', what: '跑什么', when: '什么时候', rep: '只这一次？' };
@@ -355,7 +356,7 @@ async function addFlow(gid0) {
       <div class="as-list">${tmp ? (lib.map(n => `<label class="as-opt${st.tasks.has(n) ? ' on' : ''}"><input type="checkbox" data-af-task="${esc(n)}" ${st.tasks.has(n) ? 'checked' : ''}> ${esc(tn(n))}</label>`).join('') || '<span class="xsmall faint">这个游戏没有可选的任务</span>')
         : routines.map(n => `<label class="as-opt${n === st.routine ? ' on' : ''}"><input type="radio" name="af-rt" value="${esc(n)}" ${n === st.routine ? 'checked' : ''}> ${esc(n)}</label>`).join('')}</div>
       <div class="xsmall faint">${tmp ? '选项用这个任务在任务预设里的设置，没有就用工具默认。挑好了点「下一步」。' : routines.length ? '' : '这个游戏还没有任务预设。'}</div>`; },
-    when: () => whenEditor(st.when, { now: true }) + (isPC(game(st.game)) ? '<div class="xsmall faint">电脑游戏选「加入队列」会先问你能不能让出电脑；锁屏时要等解锁。</div>' : ''),
+    when: () => whenEditor(st.when, { now: true }) + (isPC(game(st.game)) ? '<div class="xsmall faint">电脑游戏选「轮到时」会先问你能不能让出电脑；锁屏时要等解锁。</div>' : ''),
     rep: () => { const now = st.when.kind === 'now', tmp = tmpOf(); return `<label class="as-opt${st.repeat === 'once' ? ' on' : ''}"><input type="radio" name="af-rep" value="once" ${st.repeat === 'once' ? 'checked' : ''}> <span><b>只这一次</b><div class="xsmall faint">今天跑完就没了</div></span></label>
       <label class="as-opt${st.repeat === 'daily' ? ' on' : ''}${now ? ' off' : ''}"><input type="radio" name="af-rep" value="daily" ${st.repeat === 'daily' ? 'checked' : ''} ${now ? 'disabled' : ''}> <span><b>以后也这样</b><div class="xsmall faint">${now ? '选「现在」只能只这一次' : tmp ? '存成新任务预设，并把这个时间设成它的定时' : '加入日常列表'}</div></span></label>
       ${st.repeat === 'daily' && !now ? `${tmp ? `<label class="fld xsmall">任务预设名字 <input class="inp" id="af-name" value="${esc(st.name || [...st.tasks].map(tn).slice(0, 2).join(' + '))}"></label>` : ''}${daysEditor(st.days)}` : ''}`; },
@@ -453,12 +454,32 @@ pointerSort({ box: '#sch-next', item: '.bcard.sortable', handle: '.bcard.sortabl
     toast(moved ? '顺序已改：以后每天也按这个先后' : '今天的顺序已改（临时加的只在今天）'); renderSchedule();
   } catch (x) { fail(x); }
 } });
+// 11-06：日程条目右键菜单（按钮上的操作 + 排到队尾、改开始时间、去今日任务 / 任务预设）
+document.addEventListener('contextmenu', e => {
+  const card = e.target.closest?.('.sch-item[data-id]');
+  if (!card || !S.sch) return;
+  const b = S.sch.items.find(x => x.id === card.dataset.id); if (!b) return;
+  const id = esc(b.id), btn = (act, icon, text, extra = '') => `<button type="button" data-act="${act}" data-id="${id}"${extra}><i>${icon}</i>${text}</button>`;
+  const items = [];
+  if (b.section === 'next') items.push(btn('sch-now', '▶', '现在跑'), btn('sch-queue', '⤓', '排到队尾（轮到时再跑）'), btn('sch-skip', '⏭', '今天跳过', ' data-on="1"'));
+  if (b.state === 'skipped') items.push(btn('sch-skip', '↺', '不跳过了', ' data-on="0"'), btn('sch-now', '▶', '现在跑'), btn('sch-queue', '⤓', '排到队尾（轮到时再跑）'));
+  if (b.section === 'done' && b.bad?.length) items.push(btn('sch-rerun-bad', '▶', '重跑失败项'),
+    `<button type="button" data-act="task-queue" data-gid="${esc(b.game)}" data-keys="${esc(b.bad.join('\n'))}"><i>⤓</i>失败项加入队列</button>`,
+    `<button type="button" data-act="mark-done" data-gid="${esc(b.game)}" data-keys="${esc(b.bad.join('\n'))}"><i>✓</i>失败项标为已完成</button>`);
+  if (b.kind === 'rule') items.push(btn('rule-edit', '◷', '改开始时间（以后都这样）'));
+  items.push(`<button type="button" data-act="go" data-href="#/g/${esc(b.game)}/today"><i>☰</i>去今日任务（只改今天）</button>`);
+  if (b.routine) items.push(`<button type="button" data-act="routine-open" data-gid="${esc(b.game)}" data-name="${esc(b.routine)}"><i>✎</i>去任务预设「${esc(b.routine)}」</button>`);
+  if (b.kind === 'once' && b.tasks?.length && !b.routine) items.push(btn('sch-save-routine', '＋', '存为任务预设'));
+  if (b.kind === 'once' && b.section === 'next') items.push(btn('sch-del', '✕', '删掉这一条'));
+  showCtx(e, itemTitle(b), items);
+});
 async function scheduleAct(act, el) {
   const d = S.sch; if (!d) return;
   const b = el?.dataset?.id ? d.items.find(x => x.id === el.dataset.id) : null;
   const op = async (what, body, msg) => { try { await api('POST', `/api/schedule/today/items/${encodeURIComponent(el.dataset.id)}/${what}`, body); if (msg) toast(msg); await loadState(); renderSchedule(); pollRunning(); } catch (e) { fail(e); } };
   if (act === 'sch-add') return addFlow();
   if (act === 'sch-now') return op('run-now', {}, '已挪到接下来的第一个');
+  if (act === 'sch-queue') return op('run-queue', {}, '已排到队尾：前面的轮完再跑');
   if (act === 'sch-skip') return op(el.dataset.on === '1' ? 'skip' : 'unskip', {}, el.dataset.on === '1' ? '今天跳过' : '已恢复');
   if (act === 'sch-del') { if (await confirmBox('删掉这一条？', esc(itemTitle(b)), '删掉', true)) op('delete', {}, '已删掉'); return; }
   if (act === 'sch-rerun-bad') return op('rerun-bad', { keys: b.bad }, '已放回「接下来」最前面：只重跑没做成的');

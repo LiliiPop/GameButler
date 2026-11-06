@@ -73,7 +73,7 @@ def when_text(w: dict, g: dict | None = None) -> str:
     if k == "now":
         return "现在"
     if k == "queue":
-        return "加入队列"
+        return "轮到时"  # 11-06：原「加入队列」——和「闲时」「到点」一样说的是什么时候跑：前面的轮完就轮到它
     if k == "after_refresh":
         return "刷新后马上"
     if k == "at":
@@ -109,7 +109,7 @@ class Schedule:
         w = dict(w or {})
         k = w.get("kind")
         if k not in kinds:
-            raise ValueError("「什么时候」只能是：" + "、".join({"now": "现在", "queue": "加入队列", "at": "到点", "idle": "闲时",
+            raise ValueError("「什么时候」只能是：" + "、".join({"now": "现在", "queue": "轮到时", "at": "到点", "idle": "闲时",
                                                              "after_refresh": "刷新后马上"}[x] for x in kinds))
         out = {"kind": k}
         if k == "at":

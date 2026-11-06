@@ -165,7 +165,7 @@ def _(api, m, q, b):  # 加一条一次性的（「开始」「选任务运行�
     return {"ok": True, "batch": api.enqueue(day_of(m.group(1)), b)}
 
 
-@route("POST", r"/api/schedule/([\w-]+)/(?:items|batch)/([\w-]+)/(skip|unskip|run-now|delete|save-as-routine|rerun-bad)")
+@route("POST", r"/api/schedule/([\w-]+)/(?:items|batch)/([\w-]+)/(skip|unskip|run-now|run-queue|delete|save-as-routine|rerun-bad)")
 def _(api, m, q, b):
     day, bid, op = day_of(m.group(1)), m.group(2), m.group(3)
     sch = Schedule(api.cfg)
@@ -185,6 +185,14 @@ def _(api, m, q, b):
         sch.requeue(day, bid, keys or [])
         ids = [x["id"] for x in sch.day(day)["batches"]]
         sch.set_order(day, [bid] + [i for i in ids if i != bid])
+    elif op == "run-queue":
+        # 11-06：右键「排到队尾」——这一条改成「轮到时」，挪到今天的最后，前面的轮完再跑（跑完回到原来的定时）
+        from ..signals import clear_fuse
+        clear_fuse(api.cfg, it["game"])
+        keys = it.get("tasks") if it.get("requeue") else sch.batch_keys({**it, "tasks": it.get("tasks") if it["kind"] == "once" else []})
+        sch.requeue(day, bid, keys or [], queue=True)
+        ids = [x["id"] for x in sch.day(day)["batches"]]
+        sch.set_order(day, [i for i in ids if i != bid] + [bid])
     elif op == "rerun-bad":
         from ..signals import clear_fuse
         clear_fuse(api.cfg, it["game"])

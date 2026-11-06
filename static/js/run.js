@@ -241,6 +241,7 @@ function showCtx(e, title, buttons) {
 function badTaskButtons(gid, keys) {
   const k = esc(keys.join('\n'));
   return [`<button type="button" data-act="task-rerun" data-gid="${esc(gid)}" data-keys="${k}"><i>▶</i>立刻重跑</button>`,
+    `<button type="button" data-act="task-queue" data-gid="${esc(gid)}" data-keys="${k}"><i>⤓</i>加入队列（排在后面等着重跑）</button>`,
     `<button type="button" data-act="mark-done" data-gid="${esc(gid)}" data-keys="${k}"><i>✓</i>标为已完成</button>`,
     `<button type="button" data-act="task-skip-many" data-gid="${esc(gid)}" data-keys="${k}"><i>⏭</i>跳过任务（今天不再跑）</button>`];
 }
@@ -250,6 +251,15 @@ async function taskRerun(gid, keys) {
     const r = await api('POST', '/api/schedule/today/items', { game: gid, tasks: keys, when: { kind: 'now' } });
     toast(`${shortName(gid)}：${keys.length === 1 ? `「${tn(keys[0])}」` : `${keys.length} 项`}${r.batch?.paused ? '已排进队列，恢复调度后开始' : S.running?.running ? '已排进队列，前面的跑完接着跑' : '马上重跑'}`);
     S.fastUntil = Date.now() + 40000; pollRunning();
+  } catch (e) { fail(e); }
+}
+// 11-06：没做成的排到队尾重跑（前面的轮完再跑；不在运行时段的等时段开）
+async function taskQueue(gid, keys) {
+  if (!keys.length) return;
+  try {
+    await api('POST', '/api/schedule/today/items', { game: gid, tasks: keys, when: { kind: 'queue' }, rerun: true });
+    toast(`${shortName(gid)}：${keys.length === 1 ? `「${tn(keys[0])}」` : `${keys.length} 项`}已加入队列，前面的轮完再跑`);
+    await loadState(); if (S.route.view === 'home') renderHome(); else if (S.route.view === 'schedule') renderSchedule();
   } catch (e) { fail(e); }
 }
 async function taskSkipMany(gid, keys) {
