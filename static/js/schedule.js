@@ -203,7 +203,7 @@ function bothHm(bj, bj2) {
 function ruleChip(u) {
   const d = u.days === 'daily' ? '每天' : '每周' + u.days.map(n => WEEK_MON[n - 1]).join('');
   const w = u.when || {};
-  const t = w.kind === 'queue' ? '轮到时' : w.kind === 'after_refresh' ? '刷新后马上' : w.kind === 'idle' ? `闲时${w.at ? ' · ' + bothHm(w.at) + ' 以后' : ''}` : bothHm(w.at, w.until);
+  const t = w.kind === 'queue' ? '轮到时' : w.kind === 'after_refresh' ? '任意时段' : w.kind === 'idle' ? `闲时${w.at ? ' · ' + bothHm(w.at) + ' 以后' : ''}` : bothHm(w.at, w.until);
   return `${d} ${t}`;
 }
 
@@ -292,14 +292,12 @@ async function openSchSettings() {
       间隔 <input class="inp num" type="number" min="10" max="600" id="sch-gap" value="${st.retry_gap_minutes}" style="width:80px"> 分钟</span></div>
     <div class="lrow"><div class="nm"><b>叫醒电脑</b><div>电脑睡着时，在下一个定时前把它叫醒：模拟器游戏照跑，电脑游戏等解锁。</div></div>
       <label class="small"><input type="checkbox" id="sch-wake" ${st.wake_from_sleep ? 'checked' : ''}> 打开</label></div>
-    <div class="lrow"><div class="nm"><b>刷新后马上</b><div>定时选「刷新后马上」时，刷新后过多少分钟开始</div></div>
-      <span><input class="inp num" type="number" min="0" max="240" id="sch-delay" value="${st.start_delay_minutes}" style="width:80px"> 分钟</span></div>
     <section class="sch-set-sec" aria-label="什么算闲时"><div class="ph"><h3>什么算闲时</h3>${(d.idle || {}).why || (d.idle || {}).ok ? `<span class="xsmall ${d.idle.ok ? '' : 'faint'}"><span class="dot ${d.idle.ok ? 'live' : ''}"></span> 现在：${d.idle.ok ? '是闲时' : esc(d.idle.why || '不是闲时')}</span>` : ''}</div>
       <div id="set-idle"></div></section>
     <section class="sch-set-sec" aria-label="睡眠和锁屏"><div class="ph"><h3>睡眠和锁屏</h3><span class="xsmall faint">电脑睡着、锁屏时会怎样</span></div>${powerHtml(d.power || {}, d.routines || [])}</section>
   </div>`, onMount: (m, setVal) => {
     const ed = mountIdleEditor($('#set-idle', m), st.idle_groups);  // 闲时直接在这里改（10-30 #136），和别的设置一起保存
-    setVal(() => ({ fail_retries: +$('#sch-retries', m).value, retry_gap_minutes: +$('#sch-gap', m).value, wake_from_sleep: $('#sch-wake', m).checked, stuck_restart: $('#sch-stuck', m).checked, stuck_asked: true, start_delay_minutes: +$('#sch-delay', m).value,
+    setVal(() => ({ fail_retries: +$('#sch-retries', m).value, retry_gap_minutes: +$('#sch-gap', m).value, wake_from_sleep: $('#sch-wake', m).checked, stuck_restart: $('#sch-stuck', m).checked, stuck_asked: true,
       stuck_action: $('#sch-stuck-act', m).value, task_retries: +$('#sch-try', m).value, task_max_minutes: +$('#sch-max', m).value, _on: $('#sch-on', m).checked,
       ...(ed.dirty() ? { idle_groups: ed.get() } : {}) }));
   } });
@@ -313,17 +311,18 @@ async function openSchSettings() {
 }
 
 // ------------------------------------------------------------------ 定时（挂在任务预设上）
-function whenEditor(w, opts = {}) {  // 什么时候：时间段 / 闲时 / 刷新后马上开始（加一条一次性的时还有「现在」）
+function whenEditor(w, opts = {}) {  // 什么时候：任意时段（默认）/ 时间段 / 闲时（加一条一次性的时还有「现在」）
   const gs = S.sch?.settings?.idle_groups || [];
-  const k = w.kind || (opts.now ? 'queue' : 'at');
+  const k = w.kind || (opts.now ? 'queue' : 'after_refresh');
   const t = x => x ? bjToLocal(x) : '';
+  // 11-06（规则树批注）：「刷新后马上」改名「任意时段」，放第一个、没特别设时默认用它：游戏一刷新就能跑，一直到下次刷新
   return `<div class="be-start">
+    ${opts.now ? '' : `<label class="rad"><input type="radio" name="we-kind" value="after_refresh" ${k === 'after_refresh' ? 'checked' : ''}> <b>任意时段</b> <span class="xsmall faint">不限时间：游戏一刷新就能跑，到下次刷新为止（默认）</span></label>`}
     ${opts.now || opts.queue ? `<label class="rad"><input type="radio" name="we-kind" value="queue" ${k === 'queue' || k === 'now' ? 'checked' : ''}> <b>轮到时</b> <span class="xsmall faint">${opts.now ? '排在今天的队尾，前面的轮完就轮到它；里面只在某个时段跑的任务到了时段先跑，不等前面的。选「以后也这样」= 每天都这样排' : '每天排在队尾：前面的都轮完就跑；里面只在某个时段跑的任务（例如领体力 · 午间）到了时段先跑，不等前面的'}</span></label>` : ''}
     <label class="rad nowrap"><input type="radio" name="we-kind" value="at" ${k === 'at' ? 'checked' : ''}> <b>定时</b> <input class="inp xs num t-short" type="time" id="we-at" value="${t(w.at) || '06:00'}"> 到 <input class="inp xs num t-short" type="time" id="we-until" value="${t(w.until)}"> <span class="xsmall faint">本地时间；默认截止到日常刷新时间</span></label>
     <label class="rad"><input type="radio" name="we-kind" value="idle" ${k === 'idle' ? 'checked' : ''}> <b>闲时</b>
       <span class="xsmall faint">满足「什么算闲时」就跑 · 最早 <input class="inp xs num t-short" type="time" id="we-iat" value="${k === 'idle' ? t(w.at) : ''}"> 起</span></label>
     ${opts.idleEdit ? `<div class="we-idle xsmall faint">什么算闲时：${gs.length ? esc(gs.map(g => g.map(condText).join(' 且 ')).join('；或 ')) : '还没设，在日程页「调度设置」里设'}</div>` : ''}
-    ${opts.now ? '' : `<label class="rad"><input type="radio" name="we-kind" value="after_refresh" ${k === 'after_refresh' ? 'checked' : ''}> <b>刷新后马上开始</b> <span class="xsmall faint">日常刷新后立即启动</span></label>`}
   </div>`;
 }
 function readWhen(m) {
@@ -360,7 +359,7 @@ async function editRule(id, gid, routine) {
     const it = (S.sch?.items || []).find(x => x.id === id && x.kind === 'rule');
     if (it) old = { id, game: it.game, routine: it.routine, when: it.when, days: it.days };
   }
-  const r = old ? JSON.parse(JSON.stringify(old)) : { game: gid, routine, when: { kind: 'at', at: localToBj('06:00') }, days: 'daily' };
+  const r = old ? JSON.parse(JSON.stringify(old)) : { game: gid, routine, when: { kind: 'after_refresh' }, days: 'daily' };
   const v = await modal({ title: `${old ? '改定时' : '加定时'} · ${shortName(r.game)} · ${r.routine}`, wide: true, ok: '保存', alt: old ? '删除这个定时' : '', body: `<div class="bedit">
     <div class="field-row"><b>什么时候</b>${whenEditor(r.when, { idleEdit: true, queue: true })}</div>
     <div class="field-row"><b>哪些天</b>${daysEditor(r.days)}</div>
@@ -406,7 +405,7 @@ async function addFlow(gid0) {
   const short = {
     game: () => shortName(st.game),
     what: () => tmpOf() ? (st.tasks.size ? `单项任务 ${st.tasks.size} 项` : '单项任务') : (st.routine || '—'),
-    when: () => nowOf() ? '轮到时' : st.when.kind === 'idle' ? '闲时' : st.when.kind === 'after_refresh' ? '刷新后' : (st.when.at ? bjToLocal(st.when.at) : ''),
+    when: () => nowOf() ? '轮到时' : st.when.kind === 'idle' ? '闲时' : st.when.kind === 'after_refresh' ? '任意时段' : (st.when.at ? bjToLocal(st.when.at) : ''),
     rep: () => st.repeat === 'daily' && st.when.kind !== 'now' ? '以后也这样' : '只这一次',
   };
   const title = { game: '选择游戏', what: '跑什么', when: '什么时候', rep: '只这一次？' };
@@ -540,7 +539,7 @@ async function scheduleAct(act, el) {
   if (act === 'sch-rerun-bad') return op('rerun-bad', { keys: b.bad }, '已放回「接下来」最前面：只重跑没做成的');
   if (act === 'sch-save-routine') {
     const v = await modal({ title: '存为任务预设', wide: true, ok: '保存', body: `<div class="bedit"><label class="field-row"><b>名字</b><input class="inp" id="sr-name" value="${esc(b.tasks.map(tn).slice(0, 2).join(' + '))}"></label>
-      <div class="field-row"><b>以后也跑</b><div><label class="chk"><input type="checkbox" id="sr-rule"> 加上定时</label>${whenEditor({ kind: 'at', at: localToBj('06:00') })}${daysEditor('daily')}</div></div></div>`,
+      <div class="field-row"><b>以后也跑</b><div><label class="chk"><input type="checkbox" id="sr-rule"> 加上定时</label>${whenEditor({ kind: 'after_refresh' })}${daysEditor('daily')}</div></div></div>`,
       onMount: (m, setVal) => setVal(() => ({ name: $('#sr-name', m).value.trim(), ...($('#sr-rule', m).checked ? { when: readWhen(m), days: readDays(m) } : {}) })) });
     if (v && v !== true) op('save-as-routine', v, `已存为任务预设「${v.name}」`);
     return;
@@ -665,7 +664,7 @@ const PR_ICON = {
   plus: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>',
   del: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M8 6V4h4v2M6 6l1 10h6l1-10M9 9v5M11 9v5"/></svg>',
 };
-function presetSortKey(rules, gid) {  // 闲时 0；定时按本地时刻（刷新后马上 = 刷新时刻）；没有定时排最后
+function presetSortKey(rules, gid) {  // 闲时 0；定时按本地时刻（任意时段 = 刷新时刻）；没有定时排最后
   if (!rules.length) return [2, 0];
   const ks = rules.map(u => { const w = u.when || {};
     if (w.kind === 'idle') return [0, w.at ? hmMin(bjToLocal(w.at)) : 0];

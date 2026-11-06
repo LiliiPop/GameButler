@@ -9,7 +9,7 @@
 定时：{"id": "r-…", "game": "yuan", "routine": "日常",
        "when": {"kind": "at", "at": "06:00", "until": ""}        到点（北京时间，until 空 = 到这个游戏当天刷新）
              | {"kind": "idle", "at": "", "until": ""}           闲时（at = 最早几点，空 = 刷新后；见 idle.py）
-             | {"kind": "after_refresh"}                         刷新后马上（刷新 + start_delay_minutes）
+             | {"kind": "after_refresh"}                         任意时段（11-06 改名，原「刷新后马上」）：刷新就能跑，到下次刷新
        "days": "daily" | [1–7]（星期一 = 1）}
 一次性：{"id": "o-…", "game", "routine": "" | 名, "tasks": [任务键…], "when": {"kind": "now"} | 同上的 at / idle,
         "rerun"?: true, "added": 时间}
@@ -75,7 +75,7 @@ def when_text(w: dict, g: dict | None = None) -> str:
     if k == "queue":
         return "轮到时"  # 11-06：原「加入队列」——和「闲时」「到点」一样说的是什么时候跑：前面的轮完就轮到它
     if k == "after_refresh":
-        return "刷新后马上"
+        return "任意时段"
     if k == "at":
         return f"{hm(w['at'])}" + (f" 到 {hm(w['until'])}" if w.get("until") else "")
     if k == "idle":
@@ -110,7 +110,7 @@ class Schedule:
         k = w.get("kind")
         if k not in kinds:
             raise ValueError("「什么时候」只能是：" + "、".join({"now": "现在", "queue": "轮到时", "at": "到点", "idle": "闲时",
-                                                             "after_refresh": "刷新后马上"}[x] for x in kinds))
+                                                             "after_refresh": "任意时段"}[x] for x in kinds))
         out = {"kind": k}
         if k == "at":
             parse_hm(str(w.get("at") or ""))
@@ -236,7 +236,7 @@ class Schedule:
         if k == "queue":  # 和「现在」一样只跑一次，但要等排在它前面的都轮完（scheduler.tick）
             return {"mode": "now", "queue": True}
         if k == "after_refresh":
-            return {"mode": "window", "from": S.start_delay_hm(self.cfg, g["refresh"]), "to": "", "idle": False}
+            return {"mode": "window", "from": g["refresh"], "to": "", "idle": False}  # 11-06：不再等刷新后几分钟
         return {"mode": "window", "from": w.get("at") or g["refresh"], "to": w.get("until") or "", "idle": k == "idle"}
 
     def as_batch(self, x: dict, kind: str) -> dict:

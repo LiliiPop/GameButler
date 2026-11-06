@@ -372,7 +372,7 @@ def _today_extra(api, gid: str, keys: list[str]) -> str:
     rule = next((x for x in doc["batches"] if x["game"] == gid and x["kind"] == "rule"), None)
     w = dict(rule["when"]) if rule else {"kind": "queue"}
     if w.get("kind") not in ("queue", "at", "idle"):
-        w = {"kind": "queue"}  # 「刷新后马上」一次性条目没有：按加入队列
+        w = {"kind": "queue"}  # 「任意时段」一次性条目没有：按加入队列
     try:
         b = sch.add_once(day, {"game": gid, "tasks": keys, "when": w, "label": SYNC_LABEL})
     except ValueError:  # 例如还没设置什么算闲时：按加入队列
