@@ -126,6 +126,12 @@ def forget(cfg: dict, gid: str):
 
 
 
+def _quoted(title: str) -> str:
+    """标题里第一个「…」里的名字（规整过）；没有就是空。"""
+    m = re.search(r"「([^」]+)」", title or "")
+    return _norm(m.group(1)) if m else ""
+
+
 def _shared(a: str, b: str, n: int) -> bool:
     """两个名字有没有一段至少 n 个字相同。"""
     return any(a[i:i + n] in b for i in range(len(a) - n + 1)) if len(a) >= n and len(b) >= n else False
@@ -371,6 +377,11 @@ def _merge(cfg, d, todo, current, now, results, misses, want_img) -> dict:
                             and bool(chars(a) & chars(b)))
             # 11-02：名字不完全一样的，还要活动类型相同（「叶瑄SSR·叠轨晨昏」是卡池、「怪谈：时融」是活动：不合并）
             same = exact or (same and cat(a) == cat(b))
+            # 11-06：两条标题里第一个「…」名字毫不相干的不是同一个活动——原神同一期的两个角色卡池（「万序衍盈」米提亚 /
+            # 「众水的颂诗」芙宁娜）起止时间一样、标题套话相同、正文都写着同一批 4 星，被当成一个合并掉了
+            qa, qb = _quoted(a["title"]), _quoted(b["title"])
+            if same and not exact and qa and qb and not (qa in qb or qb in qa or _shared(qa, qb, 3)):
+                continue
             if not same:
                 continue
             keep, drop = better(a, b)
