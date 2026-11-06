@@ -253,6 +253,16 @@ async function taskRerun(gid, keys) {
     S.fastUntil = Date.now() + 40000; pollRunning();
   } catch (e) { fail(e); }
 }
+// 11-06：总览右键「现在跑 / 排到队尾」：这个游戏今天的任务（今天跳过的条目也算，挪回来）
+async function gameStart(gid, kind, rerun) {
+  const g = game(gid);
+  if (kind === 'now' && isPC(g) && !(await confirmBox(`开始 ${esc(g.name)}？`, '这是电脑端游戏，运行时会占用电脑前台，期间不能用电脑。', '开始'))) return;
+  try {
+    await api('POST', '/api/schedule/today/items', { game: gid, tasks: [], when: { kind }, rerun });
+    toast(`${shortName(gid)}：${kind === 'queue' ? '已排到队尾，前面的轮完再跑' : S.running?.running ? '已排进队列，前面的跑完接着跑' : '马上开始'}`);
+    S.fastUntil = Date.now() + 40000; pollRunning(); await loadState(); if (S.route.view === 'home') renderHome();
+  } catch (e) { fail(e); }
+}
 // 11-06：没做成的排到队尾重跑（前面的轮完再跑；不在运行时段的等时段开）
 async function taskQueue(gid, keys) {
   if (!keys.length) return;
@@ -282,9 +292,15 @@ document.addEventListener('contextmenu', e => {
   }
   const row = e.target.closest?.('.b-row[data-gid]');  // 总览：这个游戏没做成的
   if (row) {
-    const g = game(row.dataset.gid); const keys = ((repMap()[row.dataset.gid]?.attention) || g?.att || []).map(a => a.task);
-    if (!keys.length) return;
-    return showCtx(e, `${shortName(row.dataset.gid)} · 没做成的 ${keys.length} 项`, badTaskButtons(row.dataset.gid, keys));
+    const gid = row.dataset.gid; const g = game(gid); const keys = ((repMap()[gid]?.attention) || g?.att || []).map(a => a.task);
+    if (keys.length) return showCtx(e, `${shortName(gid)} · 没做成的 ${keys.length} 项`, badTaskButtons(gid, keys));
+    if (g?.running) return;
+    // 11-06：没有要处理的（等待 / 完成 / 没有任务 / 今天跳过）也有右键：现在跑 / 排到队尾 / 修改今日任务
+    const ok = g && g.total && g.done >= g.total;
+    return showCtx(e, shortName(gid), [
+      `<button type="button" data-act="game-start" data-gid="${esc(gid)}" data-kind="now"${ok ? ' data-rerun="1"' : ''}><i>▶</i>${ok ? '现在重跑' : '现在跑'}</button>`,
+      `<button type="button" data-act="game-start" data-gid="${esc(gid)}" data-kind="queue"${ok ? ' data-rerun="1"' : ''}><i>⤓</i>排到队尾</button>`,
+      `<button type="button" data-act="go" data-href="#/g/${esc(gid)}/today"><i>☰</i>修改今日任务</button>`]);
   }
   const tr = e.target.closest?.('.rtab tr[data-key]');  // 游戏页「运行记录」：今天失败的那一行（11-03）
   if (tr) return showCtx(e, tn(tr.dataset.key), badTaskButtons(tr.dataset.gid, [tr.dataset.key]));

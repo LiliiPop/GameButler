@@ -39,7 +39,8 @@ document.addEventListener('click', async e => {
     case 'pk-queue': case 'pk-copy': case 'pk-new': case 'pk-del': presetAct(act, el); break;
     case 'rule-edit': editRule(el.dataset.id); break;
     case 'rule-add': editRule(null, el.dataset.gid, el.dataset.name); break;
-    case 'go': location.hash = el.dataset.href; break;  // 11-06：右键菜单里的跳转
+    case 'go': location.hash = el.dataset.href; break;
+    case 'game-start': gameStart(el.dataset.gid, el.dataset.kind, el.dataset.rerun === '1'); break;  // 11-06：右键菜单里的跳转
     case 'routine-open': S.pendingRoutine = el.dataset.name; location.hash = `#/g/${el.dataset.gid}/routine`; break;
     case 'mount-remove': removeGame(el.dataset.gid); break;
     case 'mount-edit': editGame(el.dataset.gid); break;

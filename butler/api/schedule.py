@@ -182,7 +182,7 @@ def _(api, m, q, b):
         clear_fuse(api.cfg, it["game"])
         # 不等条件，这一条自己挪到「接下来」的第一个、马上跑（11-01：不再另加一条，跑完「跑过的」里只有它一条）
         keys = it.get("tasks") if it.get("requeue") else sch.batch_keys({**it, "tasks": it.get("tasks") if it["kind"] == "once" else []})
-        sch.requeue(day, bid, keys or [])
+        sch.requeue(day, bid, keys or [], rerun=bool(b.get("rerun")))  # rerun：「跑过的」里的条目再跑一遍（11-06）
         ids = [x["id"] for x in sch.day(day)["batches"]]
         sch.set_order(day, [bid] + [i for i in ids if i != bid])
     elif op == "run-queue":
@@ -190,7 +190,7 @@ def _(api, m, q, b):
         from ..signals import clear_fuse
         clear_fuse(api.cfg, it["game"])
         keys = it.get("tasks") if it.get("requeue") else sch.batch_keys({**it, "tasks": it.get("tasks") if it["kind"] == "once" else []})
-        sch.requeue(day, bid, keys or [], queue=True)
+        sch.requeue(day, bid, keys or [], queue=True, rerun=bool(b.get("rerun")))
         ids = [x["id"] for x in sch.day(day)["batches"]]
         sch.set_order(day, [i for i in ids if i != bid] + [bid])
     elif op == "rerun-bad":

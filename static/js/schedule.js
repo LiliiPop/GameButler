@@ -111,7 +111,9 @@ function itemRow(b, i, draggable = false) {
     b.rerun ? '今天做过的也再跑' : ''].filter(Boolean).join(' · ');
   const row = `<div class="bcard sch-item${b.state === 'attention' ? ' warm' : ''}${live ? ' live' : ''}${b.state === 'skipped' ? ' off' : ''}${draggable ? ' sortable' : ''}" data-i="${i}" data-id="${esc(b.id)}" style="--gc:${c}">
     <span class="bc-no"><span class="bgrip" aria-hidden="true">${draggable ? ICON.grip : ''}</span></span>
-    <span class="bc-name"><i class="b-bar"></i><a href="#/g/${esc(b.game)}/today" draggable="false" title="去改今天的任务：选项、跳过、再跑一次都只管今天（要以后都这样，去「任务预设」）">${esc(itemTitle(b))}</a></span>
+    <span class="bc-name"><i class="b-bar"></i>${b.section === 'done'
+      ? `<a href="#/g/${esc(b.game)}/runs" draggable="false" title="看这个游戏今天的运行记录">${esc(itemTitle(b))}</a>`
+      : `<a href="#/g/${esc(b.game)}/today" draggable="false" title="去改今天的任务：选项、跳过、再跑一次都只管今天（要以后都这样，去「任务预设」）">${esc(itemTitle(b))}</a>`}</span>
     <span class="bc-when" title="${esc(src)}">${b.kind === 'rule' ? `<button type="button" class="linkbtn" data-act="rule-edit" data-id="${esc(b.id)}" title="改启动时间">${esc(when)}</button>` : esc(when)}</span>
     <div class="bc-st"><span class="pill ${cls}">${stText}</span>
       ${b.section === 'next' && b.eta_late ? '<div class="xsmall bwarn" title="按顺序和预计时长估的；赶时段的任务可能插队">可能赶不上它的时段</div>' : ''}${b.section === 'next' && !b.eta && b.eta_note ? `<div class="xsmall faint">${esc(b.eta_note)}</div>` : ''}
@@ -454,23 +456,18 @@ pointerSort({ box: '#sch-next', item: '.bcard.sortable', handle: '.bcard.sortabl
     toast(moved ? '顺序已改：以后每天也按这个先后' : '今天的顺序已改（临时加的只在今天）'); renderSchedule();
   } catch (x) { fail(x); }
 } });
-// 11-06：日程条目右键菜单（按钮上的操作 + 排到队尾、改开始时间、去今日任务 / 任务预设）
+// 11-06：日程条目右键菜单——已跳过的：现在重跑 / 排到队尾 / 修改今日任务；其他：现在跑 / 排到队尾 / 今天跳过 / 修改今日任务
+// （「跑过的」里的条目：现在跑 / 排到队尾都是把今天做过的再跑一遍）
 document.addEventListener('contextmenu', e => {
   const card = e.target.closest?.('.sch-item[data-id]');
   if (!card || !S.sch) return;
   const b = S.sch.items.find(x => x.id === card.dataset.id); if (!b) return;
-  const id = esc(b.id), btn = (act, icon, text, extra = '') => `<button type="button" data-act="${act}" data-id="${id}"${extra}><i>${icon}</i>${text}</button>`;
-  const items = [];
-  if (b.section === 'next') items.push(btn('sch-now', '▶', '现在跑'), btn('sch-queue', '⤓', '排到队尾（轮到时再跑）'), btn('sch-skip', '⏭', '今天跳过', ' data-on="1"'));
-  if (b.state === 'skipped') items.push(btn('sch-skip', '↺', '不跳过了', ' data-on="0"'), btn('sch-now', '▶', '现在跑'), btn('sch-queue', '⤓', '排到队尾（轮到时再跑）'));
-  if (b.section === 'done' && b.bad?.length) items.push(btn('sch-rerun-bad', '▶', '重跑失败项'),
-    `<button type="button" data-act="task-queue" data-gid="${esc(b.game)}" data-keys="${esc(b.bad.join('\n'))}"><i>⤓</i>失败项加入队列</button>`,
-    `<button type="button" data-act="mark-done" data-gid="${esc(b.game)}" data-keys="${esc(b.bad.join('\n'))}"><i>✓</i>失败项标为已完成</button>`);
-  if (b.kind === 'rule') items.push(btn('rule-edit', '◷', '改开始时间（以后都这样）'));
-  items.push(`<button type="button" data-act="go" data-href="#/g/${esc(b.game)}/today"><i>☰</i>去今日任务（只改今天）</button>`);
-  if (b.routine) items.push(`<button type="button" data-act="routine-open" data-gid="${esc(b.game)}" data-name="${esc(b.routine)}"><i>✎</i>去任务预设「${esc(b.routine)}」</button>`);
-  if (b.kind === 'once' && b.tasks?.length && !b.routine) items.push(btn('sch-save-routine', '＋', '存为任务预设'));
-  if (b.kind === 'once' && b.section === 'next') items.push(btn('sch-del', '✕', '删掉这一条'));
+  const id = esc(b.id), again = b.section === 'done' ? ' data-rerun="1"' : '';
+  const btn = (act, icon, text, extra = '') => `<button type="button" data-act="${act}" data-id="${id}"${extra}><i>${icon}</i>${text}</button>`;
+  const today = `<button type="button" data-act="go" data-href="#/g/${esc(b.game)}/today"><i>☰</i>修改今日任务</button>`;
+  const items = b.state === 'skipped'
+    ? [btn('sch-now', '▶', '现在重跑'), btn('sch-queue', '⤓', '排到队尾'), today]
+    : [btn('sch-now', '▶', b.section === 'done' ? '现在重跑' : '现在跑', again), btn('sch-queue', '⤓', '排到队尾', again), btn('sch-skip', '⏭', '今天跳过', ' data-on="1"'), today];
   showCtx(e, itemTitle(b), items);
 });
 async function scheduleAct(act, el) {
@@ -478,8 +475,8 @@ async function scheduleAct(act, el) {
   const b = el?.dataset?.id ? d.items.find(x => x.id === el.dataset.id) : null;
   const op = async (what, body, msg) => { try { await api('POST', `/api/schedule/today/items/${encodeURIComponent(el.dataset.id)}/${what}`, body); if (msg) toast(msg); await loadState(); renderSchedule(); pollRunning(); } catch (e) { fail(e); } };
   if (act === 'sch-add') return addFlow();
-  if (act === 'sch-now') return op('run-now', {}, '已挪到接下来的第一个');
-  if (act === 'sch-queue') return op('run-queue', {}, '已排到队尾：前面的轮完再跑');
+  if (act === 'sch-now') return op('run-now', { rerun: el.dataset.rerun === '1' }, '已挪到接下来的第一个');
+  if (act === 'sch-queue') return op('run-queue', { rerun: el.dataset.rerun === '1' }, '已排到队尾：前面的轮完再跑');
   if (act === 'sch-skip') return op(el.dataset.on === '1' ? 'skip' : 'unskip', {}, el.dataset.on === '1' ? '今天跳过' : '已恢复');
   if (act === 'sch-del') { if (await confirmBox('删掉这一条？', esc(itemTitle(b)), '删掉', true)) op('delete', {}, '已删掉'); return; }
   if (act === 'sch-rerun-bad') return op('rerun-bad', { keys: b.bad }, '已放回「接下来」最前面：只重跑没做成的');

@@ -93,9 +93,11 @@ function homeRow(g, i) {
   if (g.watch) return watchRow(g, i);
   const rep = repMap()[g.id]; const first = (rep?.attention || [])[0];
   const st = gstate(g);
-  const label = { run: '运行中', bad: '要处理', ok: '完成' }[st[1]] || (g.total ? '等待' : '没有任务');
+  // 11-06：今天的条目都被跳过了：写「今天跳过」，不是「没有任务」
+  const skippedAll = !g.total && (S.homeSch?.items || []).some(b => b.game === g.id && b.state === 'skipped');
+  const label = { run: '运行中', bad: '要处理', ok: '完成' }[st[1]] || (g.total ? '等待' : skippedAll ? '今天跳过' : '没有任务');
   const last = g.last_run !== undefined ? g.last_run : rep?.last_run;
-  const prog = g.total ? `日常 ${g.done} / ${g.total}` : '今天没有任务';
+  const prog = g.total ? `日常 ${g.done} / ${g.total}` : skippedAll ? '今天跳过了，右键可以现在跑或排到队尾' : '今天没有任务';
   const nx = (S.homeSch?.items || []).find(b => b.game === g.id && b.section === 'next');
   let det;
   if (st[1] === 'bad') det = g.problem ? esc(g.problem) : attSummary(g.att || rep?.attention || []) || `${prog} · 有 ${g.attention} 项要处理`;
@@ -104,7 +106,7 @@ function homeRow(g, i) {
   else det = nx ? `${esc(whenShort(nx))}${nx.routine ? ` · ${esc(nx.routine)}` : ''}` : prog;
   // 11-02：每个游戏按自己的刷新时刻换天（例如原神北京 04:00、恋与深空 05:00），写出这一行算的是哪个游戏日
   if (g.today) det += ` <span class="faint xsmall" title="这一行算的是 ${esc(g.today)} 这个游戏日：每天北京 ${esc(g.refresh || '')} 刷新后换到下一天">· ${esc(g.today.slice(5))}</span>`;
-  return `<a class="b-row${st[1] === 'bad' ? ' att' : ''}" href="#/g/${esc(g.id)}/today" data-gid="${esc(g.id)}" style="--gc:${tint(g, i)}"${st[1] === 'bad' ? ' title="右键：立刻重跑 / 标为已完成 / 跳过任务"' : ''}>
+  return `<a class="b-row${st[1] === 'bad' ? ' att' : ''}" href="#/g/${esc(g.id)}/today" data-gid="${esc(g.id)}" style="--gc:${tint(g, i)}" title="${st[1] === 'bad' ? '右键：立刻重跑 / 加入队列 / 标为已完成 / 跳过任务' : '右键：现在跑 / 排到队尾 / 修改今日任务'}">
     <span class="b-name"><i></i><b>${esc(splitName(g.name)[0])}</b></span>
     <span class="badge ${st[1] === 'off' ? '' : st[1]}">${label}</span>
     <span class="b-det" title="${det.replace(/<[^>]+>/g, '')}">${det}</span>${st[1] === 'bad' ? moreBtn('立刻重跑 / 标为已完成 / 跳过任务') : ''}</a>`;
