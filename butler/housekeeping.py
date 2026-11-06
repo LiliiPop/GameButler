@@ -11,7 +11,9 @@ from pathlib import Path
 
 KEEP = {
     "debug_logs": 3,     # data/maafw/<游戏>/debug/maafw.bak.*.log：留最近几份
-    "shots_days": 14,    # 出错 / 卡住截图（on_error、stuck）：留多少天
+    "shots_days": 14,    # 管家自己的卡住截图（stuck，运行记录里链着）：留多少天
+    "error_days": 3,     # 脚本出错截图（MaaFramework 的 on_error、vision）：留多少天（11-06：代号鸢 3 天就 600 MB）
+    "error_mb": 300,     # 并且每个游戏最多留这么多 MB，超过从旧的删
     "runs_days": 60,     # data/runs/<日期>：运行记录留多少天
     "logs_days": 30,     # data/logs：管家自己的输出日志
 }
@@ -40,10 +42,20 @@ def clean(data_dir: str | Path) -> dict:
         logs = sorted((game / "debug").glob("maafw.bak.*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
         for p in logs[KEEP["debug_logs"]:]:
             freed += _rm(p); files += 1
-        for sub in ("debug/on_error", "debug/vision", "stuck"):
-            for p in (game / sub).glob("*"):
-                if p.is_file() and _older(p, KEEP["shots_days"]):
-                    freed += _rm(p); files += 1
+        for p in (game / "stuck").glob("*"):
+            if p.is_file() and _older(p, KEEP["shots_days"]):
+                freed += _rm(p); files += 1
+        shots = [p for sub in ("debug/on_error", "debug/vision") for p in (game / sub).glob("*") if p.is_file()]
+        shots.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        total = 0
+        for p in shots:
+            try:
+                size = p.stat().st_size
+            except OSError:
+                continue
+            total += size
+            if _older(p, KEEP["error_days"]) or total > KEEP["error_mb"] * 1048576:
+                freed += _rm(p); files += 1
     for day in (data / "runs").glob("*"):
         if day.is_dir() and _older(day, KEEP["runs_days"]):
             freed += sum(f.stat().st_size for f in day.rglob("*") if f.is_file())
