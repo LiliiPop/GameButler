@@ -591,6 +591,10 @@ class Runner:
         if rec.get("entry"):
             res, why = self.run_entry(rec["entry"], rec.get("override", {}), rec.get("timeout_s", 480), rec.get("stall_s", 240))
             emit("recovery", result=res, detail=why)
+            if res not in ("succeeded", "stopped") and not hard and rec.get("package"):
+                # 11-07：恋与深空停在「是否离开家园？」弹窗上，按返回、走启动流程都过不去，之后每项都「重新进游戏没成功」。
+                # 不强关的恢复没成功 → 再强关游戏重来一次
+                return self.recover(hard=True)
             if res != "succeeded":
                 self.note(f"重新进游戏没成功（{res}{'：' + why if why else ''}）")
 
@@ -658,8 +662,16 @@ class Runner:
         stopped = False
         if not once:  # 最后补跑那次：接着用补跑前恢复时记下的
             self.notes = []
+        self.skipped_now = False  # 11-07：上一项收尾（重开游戏）时点的「跳过当前任务」不带到这一项
         for i in range(1, attempts + 1):
             n = attempt0 + i
+            if i > 1 and getattr(self, "skipped_now", False):
+                # 11-07：没做成后在「重开游戏、准备重试」时点了跳过当前任务 → 这一项就此跳过，不再跑第 2 次
+                self.skipped_now = False
+                final = {**final, "result": "stopped", "detail": "已跳过"}
+                emit("task_end", task=name, attempt=n - 1, result="stopped", detail="已跳过", minutes=final.get("minutes", 0),
+                     focus=final.get("focus", []), flags=final.get("flags", []), shots=final.get("shots", []))
+                return final, False
             emit("task_start", task=name, attempt=n)
             t0 = time.monotonic()
             self.shots = []
