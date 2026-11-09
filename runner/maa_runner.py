@@ -430,6 +430,10 @@ class Runner:
         这时不用每项的固定最长时间，timeout_s 只是兜底。stall_s = 0：不判卡死，只看每项的最长时间。"""
         self.progress.reset()
         job = self.tasker.post_task(entry, override)
+        if getattr(job, "job_id", 1) in (0, None):
+            # 11-08：模拟器被关掉后框架报「Tasker not inited」，任务根本没发出去（编号 0）；
+            # 以前在这里一直等到超时，界面上就一直显示「运行中」
+            return "failed", "任务没发出去：模拟器断开了（被关掉了？）"
         start = time.monotonic()
         sig, changed, last_look = None, start, 0.0
         while True:
@@ -721,8 +725,9 @@ class Runner:
                         pass
                 self.evidence = []
             ev = list(self.evidence)
-            if res in ("stalled", "timeout") and not self.alive():
-                # 例如 10-17 05:14 模拟器 adb 断开：之后每个任务都「4 分钟无进展」，白白跑了 3 个多小时
+            if res in ("stalled", "timeout", "failed") and not t["entry"].startswith("@") and not self.alive():
+                # 例如 10-17 05:14 模拟器 adb 断开：之后每个任务都「4 分钟无进展」，白白跑了 3 个多小时；
+                # 11-08 08:47 模拟器被关掉：这一项「失败」后恢复、下一项都发不出任务，一直挂着显示「运行中」
                 self.abort_reason = "模拟器连不上了（adb 断开、截图为空），后面的任务这次不跑了，等下次运行重新启动模拟器"
                 emit("abort", reason=self.abort_reason)
                 why = self.abort_reason
