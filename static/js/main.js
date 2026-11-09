@@ -72,6 +72,10 @@ document.addEventListener('click', async e => {
     case 'import': importFromTool(); break;
     case 'resume-run': resumeRun(); break;
     case 'resume-drop': dropResume(); break;
+    case 'tool-upd-ok': case 'tool-upd-go':
+      api('POST', `/api/tool-updates/${encodeURIComponent(el.dataset.gid)}/dismiss`).then(loadState).then(renderBars).catch(fail);
+      if (act === 'tool-upd-go') { delete S.schemas[el.dataset.gid]; delete S.switches[el.dataset.gid]; location.hash = `#/g/${el.dataset.gid}/routine`; }
+      break;
     case 'rerun-bad': rerunBad(); break;
     case 'admin-hide': try { localStorage.setItem('gb-admin-hint', '1'); } catch (x) { /* 忽略 */ } renderBars(); break;
     case 'opt-seg': setOpt(i, el.dataset.opt, el.dataset.case); break;

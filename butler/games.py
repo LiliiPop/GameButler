@@ -422,7 +422,20 @@ class MaaGame(ReservedGame):
         threading.Thread(target=work, daemon=True, name="launch-game").start()
         return f"正在打开模拟器「{g['emulator']}」" + ("和游戏" if g.get("package") else "（没记录游戏包名，开好后请手动点开游戏）")
 
+    def _tool_sig(self) -> tuple:
+        """interface.json（及它 import 的文件）的修改时间：工具更新了就重新读（11-09：以前要重启管家才看得到新功能）。"""
+        d = self.g.get("project_dir", "")
+        out = []
+        for rel in ["interface.json"] + list((self._proj.iface.get("import", []) if self._proj else []) or []):
+            try:
+                out.append(os.path.getmtime(os.path.join(d, rel)))
+            except OSError:
+                out.append(0)
+        return tuple(out)
+
     def project(self) -> Project:
+        if self._proj is not None and getattr(self, "_sig", None) != self._tool_sig():
+            self._proj, self._labels = None, None
         if self._proj is None:
             g = self.g
             self._proj = Project(g["project_dir"], g.get("mfa_config"), g.get("mfa_instance"), g.get("resource"),
@@ -440,6 +453,14 @@ class MaaGame(ReservedGame):
             if g.get("gacha_reader"):  # 管家自己加的任务：读抽卡资源（顶栏数字），给主页和资源曲线用
                 self._proj.tasks.append({"name": GACHA_TASK, "entry": f"@gacha:{self.gid}",
                                          "description": "点进卡池界面，读顶栏的抽卡货币和抽卡券数量，记进管家的抽卡资源。只看不点抽卡按钮，不消耗任何东西。"})
+            self._sig = self._tool_sig()
+            try:  # 11-09：和上次看到的工具对比，有新功能就记一条提醒
+                from . import toolsync
+                up = toolsync.check_update(self.cfg, self.gid, self._proj)
+                if up:
+                    self._tool_update = up
+            except Exception:
+                pass
         return self._proj
 
     def task_names(self) -> list[str]:

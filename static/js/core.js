@@ -360,6 +360,17 @@ function renderBars() {
     if (nw.length) h += `<section class="runline thin"><div class="rl-top"><div class="rl-l">有新版本：${nw.map(t => `${esc(t.name)} ${esc(t.version)} → <b>${esc(t.latest)}</b>`).join('；')}</div>
       <div class="rl-r">${nw.map(t => `<button class="btn ghost" data-act="open-tool" data-updater="1" data-gid="${esc(t.games[0])}" title="打开 ${esc(t.name)}，用它自带的更新器更新">打开 ${esc(t.name)} 更新</button>`).join('')}<button class="btn ghost" data-act="upd-hide" data-v="${esc(JSON.stringify(Object.fromEntries(nw.map(t => [t.name, t.latest]))))}">不再提示</button></div></div></section>`;
   }
+  // 11-09：MAA 工具更新后的新功能（新任务、任务预设里用到的选项多了哪些值）：点「看看」去任务预设里选
+  for (const u of (S.state?.tool_updates || [])) {
+    const parts = [];
+    if (u.new_tasks?.length) parts.push(`新任务：${u.new_tasks.map(x => `「${esc(tn(x))}」`).join('、')}`);
+    for (const c of (u.changes || []).slice(0, 4)) parts.push(`${esc(tn(c.task))} ·「${esc(c.option)}」${c.new ? '是新选项' : '新增'}：${esc(c.cases.slice(0, 4).join('、'))}${c.cases.length > 4 ? ' 等' : ''}`);
+    if ((u.changes || []).length > 4) parts.push(`还有 ${u.changes.length - 4} 处`);
+    if (u.gone_tasks?.length) parts.push(`去掉了：${u.gone_tasks.map(x => `「${esc(x)}」`).join('、')}`);
+    h += triLine('warm', `${esc(splitName(u.name)[0])} 的脚本更新了${u.to ? `（${u.from ? esc(u.from) + ' → ' : ''}${esc(u.to)}）` : ''}${parts.length ? '，有新功能' : ''}`, '',
+      `<button class="btn ghost" data-act="tool-upd-ok" data-gid="${esc(u.game)}">知道了</button><button class="btn warn" data-act="tool-upd-go" data-gid="${esc(u.game)}">去任务预设看看</button>`,
+      parts.length ? parts.join('<br>') : '没有影响你任务预设的变化。');
+  }
   if (P && !HALT) {
     h += triLine('warm', '已让出电脑，调度暂停', `${esc(P.reason || '让出电脑')}${P.since ? `（${esc(mdhm(P.since))} 起）` : ''}`,
       '<button class="btn warn" data-act="resume">恢复调度</button>', '什么都不会开始，你手动排的也等恢复后再跑。');

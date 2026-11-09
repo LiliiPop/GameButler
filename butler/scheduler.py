@@ -242,6 +242,9 @@ class Scheduler:
             waits = [MAX_SLEEP]
             wake_at: list = []
             self._mark_missed(now, waits)
+            if not self.rs.current():  # 11-09：任务预设的选项因为工具开着没写回去的，工具关了就写
+                from . import toolsync
+                toolsync.flush(self.cfg, self.log)
             doc = Schedule(self.cfg).day(sched_day(now))
             rows, ready = [], []
             ahead = False  # 排在前面的还有没轮完的（「加入队列」的条目要等它们）

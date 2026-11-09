@@ -919,6 +919,7 @@ async function routineOp(op, name) {
   const ed = S.ed; const doc = ed.routines;
   const commit = async (msg, sel, renamed) => {
     const r = await api('PUT', `/api/routines/${encodeURIComponent(ed.gid)}`, { routines: doc.routines, ...(renamed ? { renamed } : {}) });
+    if (r.synced) setTimeout(() => toast(r.synced), 1200);  // 11-09：选项写回工具的结果
     if (r.removed_rules) msg += `（它的 ${r.removed_rules} 个定时也删了）`;
     toast(msg); await loadState();
     S.ed.routineName = sel; await loadEditor(ed.gid, ed.tab); renderGame();

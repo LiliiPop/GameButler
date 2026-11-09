@@ -97,7 +97,26 @@ def _(api, m, q, b):
     from .. import watch as W
     return {"games": [game_card(api, gid, cur) for gid in api.cfg["games"]], "watch": W.cards(api.cfg), "now": now_bj(),
             "paused": api.rs.paused(), "game_day": sched_day().isoformat(), "admin": is_admin(),
-            "appearance": api.appearance()}
+            "appearance": api.appearance(), "tool_updates": _tool_updates(api)}
+
+
+def _tool_updates(api) -> list:
+    from .. import toolsync
+    for gid in api.cfg["games"]:  # 顺手看一眼工具有没有更新（读 interface 有缓存，只比修改时间）
+        try:
+            ad = api.adapter(gid)
+            if hasattr(ad, "_tool_sig"):
+                ad.project()
+        except Exception:
+            pass
+    return [u for u in toolsync.updates() if u.get("game") in api.cfg["games"]]
+
+
+@route("POST", r"/api/tool-updates/(\w+)/dismiss")
+def _(api, m, q, b):
+    from .. import toolsync
+    toolsync.dismiss(m.group(1))
+    return {"ok": True}
 
 
 @route("GET", "/api/running")

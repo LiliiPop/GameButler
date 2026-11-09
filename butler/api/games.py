@@ -177,7 +177,13 @@ def _(api, m, q, b):
         sch.routine_renamed(gid, old, new)
     gone = sch.routines_kept(gid, set((b.get("routines") or {}).keys()))
     api.sched.wake()
-    return {"ok": True, "removed_rules": len(gone), **routines_view(api, gid)}
+    synced = ""
+    try:  # 11-09：选项以管家为准，写回工具自己的配置（工具开着就等它关了再写）
+        from .. import toolsync
+        synced = toolsync.write_back(api.cfg, gid)
+    except Exception as e:
+        synced = f"写回工具没成功：{type(e).__name__}: {e}"
+    return {"ok": True, "removed_rules": len(gone), "synced": synced, **routines_view(api, gid)}
 
 
 @route("GET", r"/api/today/(\w+)")
