@@ -1,0 +1,57 @@
+{
+  "gb_NICE贴纸_回应动态": {
+    "doc": "11-11：回应栏里的「NICE」是彩色贴纸，OCR 时认时不认（11-05、11-07、11-08、11-11 都卡在这一步）。认不出字时按贴纸图片认（2026-11-11 实机截图裁剪）",
+    "recognition": {
+      "type": "TemplateMatch",
+      "param": {
+        "template": [
+          "gb/tot_nice.png"
+        ],
+        "roi": [
+          330,
+          150,
+          140,
+          840
+        ],
+        "threshold": 0.7
+      }
+    },
+    "action": {
+      "type": "Click"
+    },
+    "pre_delay": 800,
+    "post_delay": 1500,
+    "focus": {
+      "Node.Recognition.Succeeded": "<span style=\"color:Limegreen\">回应动态完成</span>"
+    },
+    "next": [
+      "返回你我之间首页_完成打卡"
+    ]
+  },
+  "gb_逸梦_要选梦笺": {
+    "doc": "11-11：逸梦停在「梦笺选择」页（右上角标题），原来的 Flag_选择梦笺 认的是旧位置。要你在游戏里先手动选一组梦笺",
+    "recognition": {
+      "type": "OCR",
+      "param": {
+        "expected": [
+          "梦笺选择"
+        ],
+        "roi": [
+          540,
+          25,
+          180,
+          70
+        ]
+      }
+    },
+    "action": {
+      "type": "DoNothing"
+    },
+    "focus": {
+      "Node.Recognition.Succeeded": "[GB_FAIL] 逸梦 要先在游戏里手动选一组梦笺（梦笺选择页）"
+    },
+    "next": [
+      "返回主界面"
+    ]
+  }
+}

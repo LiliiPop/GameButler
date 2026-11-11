@@ -63,6 +63,15 @@ class MuMu:
             time.sleep(3)
         raise RuntimeError(f"MuMu 实例「{name}」{wait_s} 秒内没有启动完成")
 
+    def adb_ok(self, address: str) -> bool:
+        """MuMu 说实例开好了，ADB 真的连得上吗（connect + get-state = device）。"""
+        try:
+            subprocess.run([self.adb, "connect", address], capture_output=True, timeout=20, creationflags=NO_WINDOW)
+            p = subprocess.run([self.adb, "-s", address, "get-state"], capture_output=True, timeout=20, creationflags=NO_WINDOW)
+            return p.returncode == 0 and b"device" in p.stdout
+        except (OSError, subprocess.SubprocessError):
+            return False
+
     def shutdown(self, name: str, wait_s: int = 90):
         """关掉实例，等到它真的关完（不然紧接着的下一次运行会以为它还开着）。"""
         inst = self.find(name)

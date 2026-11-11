@@ -135,16 +135,6 @@ class Progress(ContextEventSink):
             return f"{window_s / 60:g} 分钟里一直在重复同样几步（{'、'.join(n for n, _ in c.most_common(4))}），「{top}」做了 {hits} 次，没有进展"
         return ""
 
-    def looping(self, window_s: int) -> list[str] | None:
-        """最近 window_s 秒里命中很多次、却只在 1–2 个节点之间打转 → 判为原地循环。"""
-        now = time.monotonic()
-        recent = [n for t, n in self.hits if now - t <= window_s]
-        if len(recent) >= 10 and self.hits and now - self.hits[0][0] >= window_s:
-            names = sorted(set(recent))
-            if len(names) <= 2:
-                return names
-        return None
-
 
 class Runner:
     def __init__(self, job: dict):
@@ -424,7 +414,40 @@ class Runner:
         except Exception:
             return None
 
-    def run_entry(self, entry: str, override: dict, timeout_s: int, stall_s: int) -> tuple[str, str]:
+    def foreground(self) -> str:
+        """模拟器前台是哪个应用（adb dumpsys window 的焦点窗口那一行）。看不出来返回空。"""
+        c = self.job["controller"]
+        if c.get("type", "adb") != "adb":
+            return ""
+        try:
+            out = subprocess.run([c["adb_path"], "-s", c["address"], "shell", "dumpsys", "window", "windows"],
+                                 capture_output=True, timeout=15, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
+        except (OSError, subprocess.SubprocessError):
+            return ""
+        for line in out.decode("utf-8", "ignore").splitlines():
+            if "mCurrentFocus" in line or "mFocusedApp" in line:
+                return line.strip()
+        return ""
+
+    def launch_diag(self, pkg: str):
+        """11-11：游戏启动不起来时留证据（代号鸢 11-10 起每次都停在安卓桌面）：装没装着、进程在不在、最近的崩溃日志。"""
+        c = self.job["controller"]
+        if c.get("type", "adb") != "adb" or not pkg:
+            return
+        nw = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        cmds = {"装着的包": f"pm list packages | grep -i {pkg.split('.')[1] if '.' in pkg else pkg}",
+                "进程": f"pidof {pkg} || echo 没有在跑",
+                "前台": "dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp'",
+                "启动日志": f"logcat -d -t 400 | grep -i -E '{pkg}|FATAL|AndroidRuntime|has died|crash' | tail -n 25"}
+        for name, cmd in cmds.items():
+            try:
+                out = subprocess.run([c["adb_path"], "-s", c["address"], "shell", cmd], capture_output=True, timeout=20,
+                                     creationflags=nw).stdout.decode("utf-8", "ignore").strip()
+            except (OSError, subprocess.SubprocessError) as e:
+                out = f"{type(e).__name__}: {e}"
+            emit("diag", what=name, out=out[-2000:])
+
+    def run_entry(self, entry: str, override: dict, timeout_s: int, stall_s: int, launch: bool = False) -> tuple[str, str]:
         """返回 (结果, 说明)。结果：succeeded / failed / timeout / stalled / stopped。
         stall_s > 0 = 卡死处理开着（11-01 定）：画面 stall_s 秒没有变化 → 卡住（stalled），之后重启游戏、按重试次数再跑；
         这时不用每项的固定最长时间，timeout_s 只是兜底。stall_s = 0：不判卡死，只看每项的最长时间。"""
@@ -436,6 +459,8 @@ class Runner:
             return "failed", "任务没发出去：模拟器断开了（被关掉了？）"
         start = time.monotonic()
         sig, changed, last_look = None, start, 0.0
+        pkg = (self.job.get("recovery") or {}).get("package", "") if launch else ""
+        away, last_fg = None, 0.0  # 启动游戏时：游戏不在前台从什么时候开始
         while True:
             if job.done:
                 if job.succeeded:
@@ -462,6 +487,24 @@ class Runner:
                     emit("info", msg=f"已截图：{shot}")
                 self.stop()
                 return "timeout", f"超过 {timeout_s / 60:g} 分钟未完成"
+            if pkg and now - last_fg >= 30:
+                # 11-11：代号鸢启动时停在安卓桌面 90 分钟（桌面上的轮播图一直在动，判不了卡死）。
+                # 启动游戏这一步：游戏 4 分钟都没到前台 → 算启动失败，不再干等
+                last_fg = now
+                fg = self.foreground()
+                if fg != getattr(self, "_last_fg", None):  # 记下前台的变化，排查「游戏没打开」用
+                    self._last_fg = fg
+                    emit("foreground", app=fg[:200])
+                if not fg or pkg in fg or "launcher" not in fg.lower():
+                    away = None  # 只认「停在安卓桌面」；别的画面（登录、更新、弹窗）照常交给卡死判断
+                elif away is None:
+                    away = now
+                elif now - away > 240:
+                    shot = self.snapshot(entry)
+                    if shot:
+                        emit("info", msg=f"已截图：{shot}")
+                    self.stop()
+                    return "failed", "游戏没打开：4 分钟都停在安卓桌面（启动指令没生效，可能要手动开一次游戏或更新）"
             if stall_s and now - last_look >= 15:  # 每 15 秒看一眼画面有没有变
                 last_look = now
                 loop = self.progress.looping(stall_s)
@@ -593,7 +636,8 @@ class Runner:
             except Exception as e:
                 self.note(f"强制关闭游戏失败：{type(e).__name__}: {e}")
         if rec.get("entry"):
-            res, why = self.run_entry(rec["entry"], rec.get("override", {}), rec.get("timeout_s", 480), rec.get("stall_s", 240))
+            res, why = self.run_entry(rec["entry"], rec.get("override", {}), rec.get("timeout_s", 480), rec.get("stall_s", 240),
+                                      launch=True)
             emit("recovery", result=res, detail=why)
             if res not in ("succeeded", "stopped") and not hard and rec.get("package"):
                 # 11-07：恋与深空停在「是否离开家园？」弹窗上，按返回、走启动流程都过不去，之后每项都「重新进游戏没成功」。
@@ -623,6 +667,8 @@ class Runner:
             results.append(final)
             if stopped:
                 break
+            if t.get("startup") and final and final["result"] not in ("succeeded", "exhausted", "stopped"):
+                self.launch_diag((self.job.get("recovery") or {}).get("package", ""))
             if t.get("startup") and final and final["result"] not in ("succeeded", "exhausted"):
                 # 游戏没启动起来（例如 10-26 未定被 B 服的隐私协议弹窗挡住）：后面的任务跑了也是白跑
                 why = f"没有跑：启动游戏没成功（{final['detail'] or final['result']}）"
@@ -693,7 +739,8 @@ class Runner:
                 res, why = self.read_gacha(t)
                 self.progress.reset()
             else:
-                res, why = self.run_entry(t["entry"], t.get("override", {}), t["timeout_s"], t["stall_s"])
+                res, why = self.run_entry(t["entry"], t.get("override", {}), t["timeout_s"], t["stall_s"],
+                                          launch=bool(t.get("startup")))
             mins = round((time.monotonic() - t0) / 60, 1)
             if self.ads:
                 time.sleep(1.5)  # 最后一张的截图线程收尾
@@ -737,7 +784,9 @@ class Runner:
             done = res in ("succeeded", "exhausted")
             more = (not done and i < attempts and res != "stopped" and not self.abort_reason and not self.halt_reason
                     and not (res == "stalled" and t.get("stall_skip"))  # 卡住后选了「跳到下一项」（调度设置）
-                    and not t.get("no_retry") and (res != "failed" or t.get("retry_on_fail", True) or retry_restart))
+                    and not t.get("no_retry")
+                    and not t["entry"].startswith("@gacha:")  # 11-11：读抽卡资源没读到不重试（只是看数字，重试也多半一样）
+                    and (res != "failed" or t.get("retry_on_fail", True) or retry_restart))
             if not done and not more and self.notes:  # 最后没做成：把恢复过程中出的错附上
                 why = (why + "；" if why else "") + "过程中：" + "；".join(dict.fromkeys(self.notes))
             # 结果写定之后再发 task_end：管家按它记当天状态
@@ -763,8 +812,9 @@ class Runner:
         # 这一项最终没做成：重启游戏再跑下一项，免得停在半路的画面 / 弹窗把后面的任务也拖垮。
         # 卡住 / 超时的一律这样（画面停在哪不知道；10-26 时绘「安排日程」第 2 次卡在日程场景，下一项「出行赠礼」跟着失败）
         bad = final and final["result"] not in ("succeeded", "exhausted")
+        # 11-11：「卡住后跳到下一项」只是不重试，游戏照样要重启——11-09 代号鸢「心纸营建」卡住后退回了标题画面，
+        # 没重启就接着跑「日常收尾」，又在标题画面卡了 10 分钟
         if (bad and not last and not self.stop_requested() and not self.abort_reason
-                and not (final["result"] == "stalled" and t.get("stall_skip"))
                 and (t.get("restart_on_fail") or final["result"] in ("stalled", "timeout"))):
             emit("info", msg=f"「{name}」没有做成，重启游戏后继续下一项")
             self.recover(hard=True)

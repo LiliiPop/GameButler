@@ -283,6 +283,17 @@ class Scheduler:
                 if r["plan"] and r["plan"].keys and is_pc_game(self.cfg["games"][b["game"]]) and WAKE.is_locked():
                     r = {**r, "plan": None, "why": "屏幕锁着：电脑游戏要解锁后才能跑（脚本看不到窗口）"}
                     waits.append(60)
+                if r["plan"] and r["plan"].keys:
+                    shut = G.free_tools(self.cfg, b["game"])
+                    if shut:  # 11-11：MAA 界面占着同一个模拟器 → 先关掉它再跑
+                        self.log(f"关掉了 {'、'.join(shut)}（它开着会和管家抢同一个模拟器）", b["game"])
+                    busy = G.tool_busy(self.cfg, b["game"])
+                    if busy:  # 11-11：工具界面开着 → 等它关掉，不开跑（以前开跑后直接失败）
+                        r = {**r, "plan": None, "why": busy}
+                        waits.append(120)
+                        if getattr(self, "_busy_said", {}).get(b["game"]) != busy:
+                            self.log(f"先不跑：{busy}", b["game"])
+                    self._busy_said = {**getattr(self, "_busy_said", {}), b["game"]: busy}
                 if r["next"] and not r["plan"]:
                     wake_at.append(r["next"])
                 if r["next"]:

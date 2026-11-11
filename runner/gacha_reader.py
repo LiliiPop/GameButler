@@ -103,8 +103,10 @@ def run(game: str, controller, tasker, conf: dict, log=print, stop=lambda: False
                 miss.append(k["key"])
         for _ in range(int(conf.get("back", 1))):
             s.back()
+        if miss and vals:  # 11-11：读到一部分就记下读到的，算完成，没读到的写在说明里（不重试、不重启游戏）
+            return "succeeded", "读到 " + "、".join(f"{k} {v}" for k, v in vals.items()) + f"；没读到：{'、'.join(miss)}", vals
         if miss:
-            return "failed", f"没读到：{'、'.join(miss)}" + (f"（读到 {vals}）" if vals else ""), vals
+            return "failed", f"没读到：{'、'.join(miss)}", vals
         return "succeeded", "读到 " + "、".join(f"{k} {v}" for k, v in vals.items()), vals
     if out_dir:  # 留一张顶栏截图，核对用
         try:

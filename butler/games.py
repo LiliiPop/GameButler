@@ -59,6 +59,78 @@ def kind(g: dict) -> str:
     return g.get("type", "maa")
 
 
+_PROCS: dict = {"at": 0.0, "names": set()}
+
+
+def running_images() -> set[str]:
+    """现在开着的程序（进程名，小写）。20 秒内重复问直接用上次的结果（调度每分钟要问好几次）。"""
+    if os.name != "nt":
+        return set()
+    if time.time() - _PROCS["at"] < 20:
+        return _PROCS["names"]
+    try:
+        out = subprocess.run(["tasklist", "/NH", "/FO", "CSV"], capture_output=True, timeout=15, creationflags=NO_WINDOW).stdout
+        names = {ln.split(b'","')[0].strip(b'"').decode("mbcs", "ignore").lower() for ln in out.splitlines() if ln.strip()}
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    _PROCS.update(at=time.time(), names=names)
+    return names
+
+
+def tool_busy(cfg: dict, gid: str) -> str:
+    """开跑前看一眼：这个游戏的工具界面、或者占着同一个模拟器的别的 MAA 界面开着吗？开着就先不跑（11-11）。
+    以前照样开跑，结果是「BetterGI 正在运行」「MaaYuan.exe 正在运行」直接失败，或者因为 MaaYuan 开着连着同一个模拟器，
+    未定 / 绘旅人「无法连接或截图为空」——一周里有 26 次这样的失败。返回原因，空 = 可以跑。"""
+    g = cfg["games"].get(gid) or {}
+    names = running_images()
+    if not names:
+        return ""
+    if g.get("type") == "bettergi" and g.get("exe") and Path(g["exe"]).name.lower() in names:
+        return f"BetterGI 开着：关掉它后自动开始（它退出时会把自己的一条龙配置存回去，覆盖管家布置的内容）"
+    left = [x for x in _gui_in_way(cfg, gid) if x.lower() in names]
+    if left:  # free_tools 关过了还在（关不掉）
+        return f"{'、'.join(left)} 开着、关不掉：手动关掉它后自动开始（避免两边同时操作模拟器）"
+    return ""
+
+
+def _gui_in_way(cfg: dict, gid: str) -> list[str]:
+    """会和管家抢模拟器的 MAA 界面：这个游戏自己的，和用同一个模拟器的别的游戏的。"""
+    g = cfg["games"].get(gid) or {}
+    out = [g["gui_exe"]] if g.get("gui_exe") else []
+    emu = g.get("emulator")
+    if emu:
+        out += [o["gui_exe"] for oid, o in cfg["games"].items()
+                if oid != gid and o.get("emulator") == emu and o.get("gui_exe")]
+    return list(dict.fromkeys(out))
+
+
+def free_tools(cfg: dict, gid: str) -> list[str]:
+    """11-11：MAA 界面（MaaYuan.exe、MFAAvalonia.exe…）开着、占着同一个模拟器 → 管家开跑前把它关掉，不再干等。
+    先正常关窗口（它会存好自己的配置），10 秒还没退出再强制结束。返回关掉了哪些。BetterGI 不在这里关（见 tool_busy）。"""
+    names = running_images()
+    closed = []
+    for exe in _gui_in_way(cfg, gid):
+        if exe.lower() not in names:
+            continue
+        try:
+            subprocess.run(["taskkill", "/IM", exe], capture_output=True, timeout=15, creationflags=NO_WINDOW)
+            for _ in range(10):
+                time.sleep(1)
+                p = subprocess.run(["tasklist", "/NH", "/FI", f"IMAGENAME eq {exe}"], capture_output=True,
+                                   timeout=15, creationflags=NO_WINDOW)
+                if exe.lower().encode() not in p.stdout.lower():
+                    break
+            else:
+                subprocess.run(["taskkill", "/F", "/T", "/IM", exe], capture_output=True, timeout=15, creationflags=NO_WINDOW)
+                time.sleep(2)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        closed.append(exe)
+    if closed:
+        _PROCS["at"] = 0.0  # 进程列表变了，下次重新看
+    return closed
+
+
 def available(g: dict) -> tuple[bool, str]:
     """这个游戏现在能不能用（工具路径存在、类型已支持）。"""
     why = type_class(g).record_problem(g)
@@ -567,7 +639,9 @@ class MaaGame(ReservedGame):
                 "gacha_conf": g.get("gacha_reader") or {},
                 "judge": J.for_task(g, td["name"]),
                 "alert_hints": g.get("alert_hints", []),
-                "timeout_s": int(minutes(td["name"], key) * 60), "stall_s": stuck_s,
+                "timeout_s": int(minutes(td["name"], key) * 60),
+                # 11-11：本来就要等很久的任务（恋与深空「陪我一起」要等 15 分钟倒计时）在游戏记录 stall_minutes 里放宽卡死判断
+                "stall_s": max(stuck_s, int((g.get("stall_minutes") or {}).get(td["name"], 0)) * 60) if stuck_s else 0,
                 **({"override": {**patched(td, it.get("choices")), **{n: {"pre_delay": 1500} for n in ad_nodes}}}
                    if ad_nodes and td["name"] == g.get("recovery_task") else {}),  # 点掉海报前等 1.5 秒，趁它还在截原图
                 "retries": retries,
@@ -621,6 +695,18 @@ class MaaGame(ReservedGame):
         ctx.emit("info", msg=f"启动/检查 MuMu 实例「{g['emulator']}」…")
         inst = mumu.ensure_started(g["emulator"])
         address = MuMu.address(inst)
+        if not mumu.adb_ok(address):
+            # 11-11：MuMu 说开好了，ADB 却连不上（实例卡死 / 端口失效），以前直接「无法连接或截图为空」失败。
+            # 先看是不是别的 MAA 界面占着它；不是就重启这个实例一次
+            busy = tool_busy(self.cfg, self.gid)
+            if busy:
+                raise RuntimeError(f"模拟器连不上：{busy}")
+            ctx.emit("warn", msg=f"模拟器开着但 ADB 连不上（{address}），重启实例「{g['emulator']}」")
+            mumu.shutdown(g["emulator"])
+            inst = mumu.ensure_started(g["emulator"])
+            address = MuMu.address(inst)
+            if not mumu.adb_ok(address):
+                raise RuntimeError(f"重启实例「{g['emulator']}」后 ADB 还是连不上（{address}）")
         ctx.emit("info", msg=f"模拟器就绪：{address}（实例 {inst['index']}）")
         dev = proj.adb_device()
         extra = {}
