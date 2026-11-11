@@ -415,18 +415,22 @@ class Runner:
             return None
 
     def foreground(self) -> str:
-        """模拟器前台是哪个应用（adb dumpsys window 的焦点窗口那一行）。看不出来返回空。"""
+        """模拟器前台是哪个应用。看不出来返回空。
+        11-11：「dumpsys window windows」在 MuMu 12（安卓 12）上什么都不输出，换成 dumpsys window / activity 两种问法。"""
         c = self.job["controller"]
         if c.get("type", "adb") != "adb":
             return ""
-        try:
-            out = subprocess.run([c["adb_path"], "-s", c["address"], "shell", "dumpsys", "window", "windows"],
-                                 capture_output=True, timeout=15, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
-        except (OSError, subprocess.SubprocessError):
-            return ""
-        for line in out.decode("utf-8", "ignore").splitlines():
-            if "mCurrentFocus" in line or "mFocusedApp" in line:
-                return line.strip()
+        nw = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        for cmd in ("dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'",
+                    "dumpsys activity activities | grep -E 'topResumedActivity|mResumedActivity'"):
+            try:
+                out = subprocess.run([c["adb_path"], "-s", c["address"], "shell", cmd], capture_output=True, timeout=15,
+                                     creationflags=nw).stdout.decode("utf-8", "ignore")
+            except (OSError, subprocess.SubprocessError):
+                continue
+            line = next((ln.strip() for ln in out.splitlines() if "/" in ln and "null" not in ln), "")
+            if line:
+                return line
         return ""
 
     def launch_diag(self, pkg: str):
@@ -437,7 +441,7 @@ class Runner:
         nw = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         cmds = {"装着的包": f"pm list packages | grep -i {pkg.split('.')[1] if '.' in pkg else pkg}",
                 "进程": f"pidof {pkg} || echo 没有在跑",
-                "前台": "dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp'",
+                "前台": "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'; dumpsys activity activities | grep -E 'ResumedActivity'",
                 "启动日志": f"logcat -d -t 400 | grep -i -E '{pkg}|FATAL|AndroidRuntime|has died|crash' | tail -n 25"}
         for name, cmd in cmds.items():
             try:

@@ -50,5 +50,32 @@
         ]
       }
     }
+  },
+  {
+    "note": "11-12：电脑上装的代号鸢换成了 Google Play 版（包名 com.qookkagames.codekite.gp.hk），原来的官网版 gw.hk 已经没有了，11-10 起启动指令发给不存在的包、一直停在安卓桌面。按包名启动（不指定 Activity）",
+    "task": "🚀 启动游戏",
+    "override": {
+      "sub_启动代号鸢港": {
+        "action": {
+          "param": {
+            "package": "com.qookkagames.codekite.gp.hk"
+          }
+        }
+      },
+      "sub_关闭代号鸢港": {
+        "action": {
+          "param": {
+            "package": "com.qookkagames.codekite.gp.hk"
+          }
+        }
+      },
+      "全关了大鸟": {
+        "action": {
+          "param": {
+            "package": "com.qookkagames.codekite.gp.hk"
+          }
+        }
+      }
+    }
   }
 ]
