@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -41,7 +42,9 @@ def read(path: Path | str, default):
 def write(path: Path | str, obj):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
+    # 每个进程 / 线程用自己的临时文件（11-22：两个进程同一刻写 running.json，共用一个 .tmp，
+    # 一个截断时另一个还在写，留下多一个「}」的坏文件；另一个的 os.replace 找不到 .tmp）
+    tmp = path.with_name(f"{path.name}.{os.getpid()}-{threading.get_ident()}.tmp")
     with open(tmp, "w", encoding="utf-8") as f:  # 落盘后再替换：断电也不会留下半个文件
         f.write(json.dumps(obj, ensure_ascii=False, indent=1))
         f.flush()

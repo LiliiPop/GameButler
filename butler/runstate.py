@@ -110,14 +110,16 @@ class RunState:
         return None
 
     def acquire(self, games: list[str]) -> dict:
-        cur = self.current()
-        if cur:
-            raise RuntimeError(f"已经有一次运行在进行（{', '.join(cur.get('games', []))}，开始于 {cur.get('started')}）")
+        # 11-22：「看有没有人在跑」和「写上自己」放在同一把锁里，两个运行进程同时来时只有一个拿得到
+        with jsonio.locked(self.running_path):
+            cur = self.current()
+            if cur:
+                raise RuntimeError(f"已经有一次运行在进行（{', '.join(cur.get('games', []))}，开始于 {cur.get('started')}）")
+            doc = {"pid": os.getpid(), "started": now_bj(), "games": games, "done_games": [],
+                   "current": None, "runner_pid": 0}
+            self._write(self.running_path, doc)
         # 不清停止标记：进程刚开出来、还没拿到锁时你点了停止，这里要认（旧的标记由调度在开跑前清掉）
         self.set_suspended(None)
-        doc = {"pid": os.getpid(), "started": now_bj(), "games": games, "done_games": [],
-               "current": None, "runner_pid": 0}
-        self._write(self.running_path, doc)
         return doc
 
     def update(self, **kw):

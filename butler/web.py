@@ -59,6 +59,8 @@
 from __future__ import annotations
 
 import json
+import os
+import socket
 import sys
 import threading
 import time
@@ -168,6 +170,18 @@ def make_handler(cfg: dict, sched):
     return H
 
 
+class _Server(ThreadingHTTPServer):
+    """11-22：Windows 上 allow_reuse_address（SO_REUSEADDR）允许第二个进程绑同一个端口。11-21 托盘程序以为后台没响应、
+    又开了一个后台，结果两个后台同时在跑、两套调度同时开跑（04:04 原神和崩铁同一秒开始），一起写 running.json 把它写坏，
+    之后一整天每个请求都报错、托盘反复提示后台意外退出。改成独占端口：端口有人占着，新开的后台直接退出。"""
+    allow_reuse_address = os.name != "nt"
+
+    def server_bind(self):
+        if os.name == "nt":
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def serve(cfg: dict, open_browser: bool = True, port: int = PORT):
     from .scheduler import Scheduler
     url = f"http://127.0.0.1:{port}"
@@ -175,7 +189,7 @@ def serve(cfg: dict, open_browser: bool = True, port: int = PORT):
     restarted = "--restarted" in sys.argv
     for i in range(240 if restarted else 1):  # 重启时：最多等 2 分钟让旧的后台放开端口
         try:
-            srv = ThreadingHTTPServer(("127.0.0.1", port), make_handler(cfg, sched))
+            srv = _Server(("127.0.0.1", port), make_handler(cfg, sched))
             break
         except OSError:
             if i == (239 if restarted else 0):
