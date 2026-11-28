@@ -89,6 +89,9 @@ def tool_busy(cfg: dict, gid: str) -> str:
         return f"BetterGI 开着：关掉它后自动开始（它退出时会把自己的一条龙配置存回去，覆盖管家布置的内容）"
     left = [x for x in _gui_in_way(cfg, gid) if x.lower() in names]
     if left:  # free_tools 关过了还在（关不掉）
+        busy = [x for x in left if gui_active(cfg, x)]
+        if busy:
+            return f"{'、'.join(busy)} 正在跑任务（你手动开的）：等它跑完、关掉后自动开始（避免两边同时操作模拟器）"
         return f"{'、'.join(left)} 开着、关不掉：手动关掉它后自动开始（避免两边同时操作模拟器）"
     return ""
 
@@ -104,6 +107,21 @@ def _gui_in_way(cfg: dict, gid: str) -> list[str]:
     return list(dict.fromkeys(out))
 
 
+def gui_active(cfg: dict, exe: str, within_s: int = 120) -> bool:
+    """11-14：这个 MAA 界面是不是正在跑任务——用它的项目目录下 debug/maafw.log 最近 within_s 秒内有没有写过来判断
+    （MaaFramework 跑任务时每秒都在写日志，界面只是开着不跑就不写）。"""
+    for o in cfg["games"].values():
+        if (o.get("gui_exe") or "").lower() != exe.lower() or not o.get("project_dir"):
+            continue
+        log = Path(o["project_dir"]) / "debug" / "maafw.log"
+        try:
+            if time.time() - log.stat().st_mtime < within_s:
+                return True
+        except OSError:
+            pass
+    return False
+
+
 def free_tools(cfg: dict, gid: str) -> list[str]:
     """11-11：MAA 界面（MaaYuan.exe、MFAAvalonia.exe…）开着、占着同一个模拟器 → 管家开跑前把它关掉，不再干等。
     先正常关窗口（它会存好自己的配置），10 秒还没退出再强制结束。返回关掉了哪些。BetterGI 不在这里关（见 tool_busy）。"""
@@ -111,6 +129,8 @@ def free_tools(cfg: dict, gid: str) -> list[str]:
     closed = []
     for exe in _gui_in_way(cfg, gid):
         if exe.lower() not in names:
+            continue
+        if gui_active(cfg, exe):  # 11-14：它正在跑任务（用户手动在用）：不关，等它跑完（tool_busy 会说明）
             continue
         try:
             subprocess.run(["taskkill", "/IM", exe], capture_output=True, timeout=15, creationflags=NO_WINDOW)
@@ -622,7 +642,9 @@ class MaaGame(ReservedGame):
             return ov
 
         def minutes(td_name, key):
-            return SAFETY_MINUTES if stuck_on else int(sset.get("task_max_minutes", 20))  # 11-02：全局
+            # 11-13：本来就很长的任务（时绘「佳期」一轮 30 分钟起步、可连跑几轮）在游戏记录 max_minutes 里放宽兜底时间
+            extra = int((g.get("max_minutes") or {}).get(td_name, 0))
+            return max(SAFETY_MINUTES if stuck_on else int(sset.get("task_max_minutes", 20)), extra)  # 11-02：全局
 
         from . import evidence as EV
         ev = EV.tasks_for(self.cfg, self.gid)

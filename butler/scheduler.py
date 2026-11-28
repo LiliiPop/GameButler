@@ -219,6 +219,12 @@ class Scheduler:
                             "next": last + gap}
                 if now - last < gap:
                     keys = fresh
+            # 11-17：只剩「做过了也跟着跑」的领取任务（rerun_with_others，本来就是今天已完成的）时不单独开游戏。
+            # 之前：别的任务失败到了重试上限被拿掉，剩下这几个领取任务照样开游戏，每 30 分钟跑一遍（11-15～17 一天几十次）
+            if not any(stn.get(k, {}).get("result") not in DONE for k in keys):
+                names = "、".join(capped[:4]) + (f" 等 {len(capped)} 项" if len(capped) > 4 else "")
+                return {**row, "plan": None, "final": True,
+                        "why": (f"{names} 没做成，今天不再自动重试；" if capped else "") + "剩下的领取任务今天已经做过，不单独开游戏"}
             if keys != p.keys:
                 drop = set(p.keys) - set(keys)
                 p.items = [t for t in p.items if (t.get("key") or t["task"]) not in drop]
@@ -248,6 +254,7 @@ class Scheduler:
             doc = Schedule(self.cfg).day(sched_day(now))
             rows, ready = [], []
             ahead = False  # 排在前面的还有没轮完的（「加入队列」的条目要等它们）
+            running_now = bool(self.rs.current() or (self.child is not None and self.child.poll() is None) or self.rs.paused())
             for b in doc["batches"]:
                 try:
                     r = self.evaluate(b, doc, now)
@@ -283,7 +290,9 @@ class Scheduler:
                 if r["plan"] and r["plan"].keys and is_pc_game(self.cfg["games"][b["game"]]) and WAKE.is_locked():
                     r = {**r, "plan": None, "why": "屏幕锁着：电脑游戏要解锁后才能跑（脚本看不到窗口）"}
                     waits.append(60)
-                if r["plan"] and r["plan"].keys:
+                if r["plan"] and r["plan"].keys and not running_now:
+                    # 11-14：只在真要开跑（没有别的在跑）时才关占着模拟器的 MAA 界面。以前排队等前一个游戏跑完时
+                    # 每轮都关一次，用户手动开的 MaaSH 跑到一半被关（未定排在深空后面，2 分钟关两次）
                     shut = G.free_tools(self.cfg, b["game"])
                     if shut:  # 11-11：MAA 界面占着同一个模拟器 → 先关掉它再跑
                         self.log(f"关掉了 {'、'.join(shut)}（它开着会和管家抢同一个模拟器）", b["game"])

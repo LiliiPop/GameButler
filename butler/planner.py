@@ -127,6 +127,8 @@ def plan(cfg: dict, store: Store, gid: str, named: list[str] | None, *, manual: 
 
     nexts = []
     items = []
+    tagalong_names = set(g.get("rerun_with_others") or [])  # 做过了也跟着再跑（只在这次还有别的任务要跑时）
+    tagalong = []
     from .schedule import Schedule
     from .timeutil import sched_day
     skip = set(Schedule(cfg).skip_tasks(sched_day(now), gid)) if day == game_day(g) else set()
@@ -138,6 +140,8 @@ def plan(cfg: dict, store: Store, gid: str, named: list[str] | None, *, manual: 
             out.skipped.append(f"{k}（今天跳过）")
             continue
         if st.get(k, {}).get("result") in DONE and not rerun:
+            if t["task"] in tagalong_names:  # 11-14：今天做过、但别的任务跑完可能又有新东西可领（时绘：假日 / 每日任务 / 周常领取）
+                tagalong.append(t)
             continue
         if t.get("_not_before") and (t["_not_before"] > now or not t.get("_ready", True)):
             nexts.append(t["_not_before"])
@@ -163,6 +167,8 @@ def plan(cfg: dict, store: Store, gid: str, named: list[str] | None, *, manual: 
                         nexts.append(min(later))
                 continue
         items.append(t)
+    if items and tagalong:  # 只在这次本来就有别的任务要跑时带上；单独不会为了它们开游戏
+        items += tagalong
 
     pools = [src] + [r["tasks"] for r in store.routines(gid)["routines"].values()]
     rec_item = next((t for pool in pools for t in pool if t["task"] == rec), {"task": rec, "choices": {}})  # 启动任务的选项（例如选服）
